@@ -265,8 +265,8 @@ int deform_conv_backward_input_cuda(
                                          offset, columns, gradInput));
   printf("backward input gpu check complete\n");
 
-  //shape_check(state, input, offset, gradOutput, weight, kH, kW, dH, dW, padH,
-  //            padW, dilationH, dilationW, deformable_group);
+  shape_check(state, input, offset, gradOutput, weight, kH, kW, dH, dW, padH,
+              padW, dilationH, dilationW, deformable_group);
   printf("backward input shape check complete\n");
 
   input = THCudaTensor_newContiguous(state, input);
@@ -408,8 +408,8 @@ int deform_conv_backward_parameters_cuda(
   THCAssertSameGPU(THCudaTensor_checkGPU(state, 5, input, offset, gradOutput,
                                          gradWeight, columns));
 
-  //shape_check(state, input, offset, gradOutput, gradWeight, kH, kW, dH, dW,
-  //            padH, padW, dilationH, dilationW, deformable_group);
+  shape_check(state, input, offset, gradOutput, gradWeight, kH, kW, dH, dW,
+             padH, padW, dilationH, dilationW, deformable_group);
 
   input = THCudaTensor_newContiguous(state, input);
   offset = THCudaTensor_newContiguous(state, offset);

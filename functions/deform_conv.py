@@ -50,11 +50,14 @@ class ConvOffset2dFunction(Function):
             else:
                 if not isinstance(input, torch.cuda.FloatTensor):
                     raise NotImplementedError
+            
+            cur_im2col_step = min(self.im2col_step, input.shape[0])
+            assert (input.shape[0] % cur_im2col_step) == 0, 'im2col step must divide batchsize'
             deform_conv.deform_conv_forward_cuda(
                 input, weight, offset, output, self.bufs_[0], self.bufs_[1],
                 weight.size(3), weight.size(2), self.stride[1], self.stride[0],
                 self.padding[1], self.padding[0], self.dilation[1],
-                self.dilation[0], self.deformable_groups, min(self.im2col_step, input.shape[0]))
+                self.dilation[0], self.deformable_groups, cur_im2col_step)
         print("--->> forward complete")
         return output
 
@@ -73,6 +76,10 @@ class ConvOffset2dFunction(Function):
             else:
                 if not isinstance(grad_output, torch.cuda.FloatTensor):
                     raise NotImplementedError
+
+            cur_im2col_step = min(self.im2col_step, input.shape[0])
+            assert (input.shape[0] % cur_im2col_step) == 0, 'im2col step must divide batchsize'
+
             if self.needs_input_grad[0] or self.needs_input_grad[1]:
                 print(self.stride[1], self.stride[0], self.dilation[1], self.dilation[0])
                 grad_input = input.new(*input.size()).zero_()
@@ -82,7 +89,7 @@ class ConvOffset2dFunction(Function):
                     grad_offset, weight, self.bufs_[0], weight.size(3),
                     weight.size(2), self.stride[1], self.stride[0],
                     self.padding[1], self.padding[0], self.dilation[1],
-                    self.dilation[0], self.deformable_groups, min(self.im2col_step, input.shape[0]))
+                    self.dilation[0], self.deformable_groups, cur_im2col_step)
 
             print("--->> backward input grad got")
 
@@ -93,7 +100,7 @@ class ConvOffset2dFunction(Function):
                     grad_weight, self.bufs_[0], self.bufs_[1], weight.size(3),
                     weight.size(2), self.stride[1], self.stride[0],
                     self.padding[1], self.padding[0], self.dilation[1],
-                    self.dilation[0], self.deformable_groups, 1, min(self.im2col_step, input.shape[0]))
+                    self.dilation[0], self.deformable_groups, 1, cur_im2col_step)
             print("--->> backward weight grad got")
 
         return grad_input, grad_offset, grad_weight
