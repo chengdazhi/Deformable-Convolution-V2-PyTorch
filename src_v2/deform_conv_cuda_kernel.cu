@@ -59,6 +59,7 @@
  */
 
 #include "deform_conv_cuda_kernel.h"
+#include <cstdio>
 
 #define CUDA_KERNEL_LOOP(i, n)                                                 \
   for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < (n);                 \
@@ -410,7 +411,7 @@ inline void deformable_col2im(cudaStream_t stream,
   //              << num_spatial_axes << " spatial axes";
 
   deformable_col2im_gpu_kernel<<<GET_BLOCKS(num_kernels), CUDA_NUM_THREADS, 0, stream>>>(
-    num_kernels, data_col, data_offset, channels, height, width, ksize_h
+    num_kernels, data_col, data_offset, channels, height, width, ksize_h,
     ksize_w, pad_h, pad_w, stride_h, stride_w,
     dilation_h, dilation_w, channel_per_deformable_group,
     parallel_imgs, deformable_group, height_col, width_col, grad_im);
@@ -489,8 +490,7 @@ __global__ void deformable_col2im_coord_gpu_kernel(const int n, const DType *dat
       cnt += 1;
     }
 
-    //grad_offset[index] = val;
-    KERNEL_ASSIGN(grad_offset[index], req, val);
+    grad_offset[index] = val;
   }
 }
 
@@ -553,8 +553,6 @@ inline void deformable_col2im_coord(cudaStream_t stream,
     parallel_imgs, 2 * ksize_h * ksize_w * deformable_group, deformable_group,
     height_col, width_col, grad_offset);
 
-
-  }
 }
 
 template void

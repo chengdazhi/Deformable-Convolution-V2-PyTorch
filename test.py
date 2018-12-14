@@ -26,8 +26,11 @@ conv_offset2d = ConvOffset2d(
     padding=1,
     num_deformable_groups=num_deformable_groups).cuda()
 
-inputs = Variable(torch.randn(N, inC, inH, inW).cuda())
+inputs = Variable(torch.randn(N, inC, inH, inW).cuda(), requires_grad=True)
 offset = conv(inputs)
+#offset = Variable(torch.randn(N, num_deformable_groups * 2 * kH * kW, inH, inW).cuda(), requires_grad=True)
 output = conv_offset2d(inputs, offset)
 output.backward(output.data)
+#import IPython
+#IPython.embed()
 print(output.size())

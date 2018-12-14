@@ -1,2 +1,4 @@
 .idea
 *.o
+_ext*
+__pycache__

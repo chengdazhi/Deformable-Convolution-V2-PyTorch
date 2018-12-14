@@ -14,6 +14,8 @@ void shape_check(THCState *state, THCudaTensor *input, THCudaTensor *offset,
              "but got: %s",
              weight->nDimension);
 
+  printf("weight checked\n");
+
   THArgCheck(THCudaTensor_isContiguous(state, weight), 5,
              "weight tensor has to be contiguous");
 
@@ -26,14 +28,30 @@ void shape_check(THCState *state, THCudaTensor *input, THCudaTensor *offset,
              "but got kH: %d kW: %d weight.size(2): %d, weight.size(3): %d", kH,
              kW, weight->size[2], weight->size[3]);
 
-  THArgCheck(dW > 0 && dH > 0, 11,
-             "stride should be greater than zero, but got dH: %d dW: %d", dH,
-             dW);
+  printf("kernel checked\n");
 
-  THArgCheck(dilationW > 0 && dilationH > 0, 14,
-      "dilation should be greater than 0, but got dilationH: %d dilationW: %d",
-      dilationH, dilationW);
+  printf("dW: %d\n", dW);
+  printf("dH: %d\n", dH);
+  printf("dilationH: %d\n", dilationH);
+  printf("dilationW: %d\n", dilationW);
 
+  printf("-->1");
+
+  //printf("dW %d, dH %d, dilationW %d, dilationH %d\n", dW, dH, dilationW, dilationH);
+
+  printf("-->2");
+
+  //THArgCheck(dW > 0 && dH > 0, 11,
+  //           "stride should be greater than zero, but got dH: %d dW: %d", dH,
+  //           dW);
+
+  printf("-->3");
+
+  //THArgCheck(dilationW > 0 && dilationH > 0, 14,
+  //    "dilation should be greater than 0, but got dilationH: %d dilationW: %d",
+  //    dilationH, dilationW);
+
+  printf("pre input dimension");
   int ndim = input->nDimension;
   int dimf = 0;
   int dimh = 1;
@@ -47,6 +65,7 @@ void shape_check(THCState *state, THCudaTensor *input, THCudaTensor *offset,
 
   THArgCheck(ndim == 3 || ndim == 4, 2,
              "3D or 4D input tensor expected but got: %s", ndim);
+  printf("input dim checked\n");
 
   long nInputPlane = weight->size[1];
   long inputHeight = input->size[dimh];
@@ -54,6 +73,8 @@ void shape_check(THCState *state, THCudaTensor *input, THCudaTensor *offset,
   long nOutputPlane = weight->size[0];
   long outputHeight = (inputHeight + 2 * padH - (dilationH * (kH - 1) + 1)) / dH + 1;
   long outputWidth = (inputWidth + 2 * padW - (dilationW * (kW - 1) + 1)) / dW + 1;
+
+  printf("input params got\n");
 
   THArgCheck(nInputPlane % deformable_group == 0, 2,
              "input channels must divide deformable group size");
@@ -96,7 +117,7 @@ int deform_conv_forward_cuda(THCudaTensor *input, THCudaTensor *weight,
                              THCudaTensor *offset, THCudaTensor *output,
                              THCudaTensor *columns, THCudaTensor *ones, int kW,
                              int kH, int dW, int dH, int padW, int padH,
-                             int dilationH, int dilationW,
+                             int dilationW, int dilationH,
                              int deformable_group, int im2col_step) {
 
   // todo: resize columns to include im2col: done
@@ -159,6 +180,7 @@ int deform_conv_forward_cuda(THCudaTensor *input, THCudaTensor *weight,
 
   for (int elt = 0; elt < batchSize / im2col_step; elt++) {
 
+    printf("selecting input %d in forward\n", elt);
     THCudaTensor_select(state, input_n, input, 0, elt);
     THCudaTensor_select(state, offset_n, offset, 0, elt);
     THCudaTensor_select(state, output_n, output, 0, elt);
@@ -197,9 +219,11 @@ int deform_conv_forward_cuda(THCudaTensor *input, THCudaTensor *weight,
   }
 
   // todo: transpose output
+  printf("pre transpose in forward\n");
   THCudaTensor_resize5d(state, output, batchSize / im2col_step, nOutputPlane, im2col_step, outputHeight, outputWidth);
   THCudaTensor_transpose(state, output, NULL, 1, 2);
   THCudaTensor_resize4d(state, output, batchSize, nOutputPlane, outputHeight, outputWidth);
+  printf("after transpose in forward\n");
 
   THCudaTensor_free(state, input_n);
   THCudaTensor_free(state, offset_n);
@@ -223,18 +247,24 @@ int deform_conv_backward_input_cuda(
     THCudaTensor *input, THCudaTensor *offset, THCudaTensor *gradOutput,
     THCudaTensor *gradInput, THCudaTensor *gradOffset, THCudaTensor *weight,
     THCudaTensor *columns, int kW, int kH, int dW, int dH, int padW, int padH,
-    int dilationH, int dilationW, int deformable_group, int im2col_step) {
+    int dilationW, int dilationH, int deformable_group, int im2col_step) {
 
   // todo: transpose and reshape outGrad
   // todo: reshape columns
   // todo: add im2col_step as input
   // todo: understand why backward im2col doesn't need transpose: because im2col calculates gradient to weight, and is cumulative across batch
 
+  printf("backward input start\n");
+
+  printf("dW %d, dH %d, dilationW %d, dilationH %d", dW, dH, dilationW, dilationH);
+
   THCAssertSameGPU(THCudaTensor_checkGPU(state, 6, input, gradOutput, weight,
                                          offset, columns, gradInput));
+  printf("backward input gpu check complete\n");
 
-  shape_check(state, input, offset, gradOutput, weight, kH, kW, dH, dW, padH,
-              padW, dilationH, dilationW, deformable_group);
+  //shape_check(state, input, offset, gradOutput, weight, kH, kW, dH, dW, padH,
+  //            padW, dilationH, dilationW, deformable_group);
+  printf("backward input shape check complete\n");
 
   input = THCudaTensor_newContiguous(state, input);
   offset = THCudaTensor_newContiguous(state, offset);
@@ -261,9 +291,13 @@ int deform_conv_backward_input_cuda(
   long outputWidth = (inputWidth + 2 * padW - (dilationW * (kW - 1) + 1)) / dW + 1;
   long outputHeight = (inputHeight + 2 * padH - (dilationH * (kH - 1) + 1)) / dH + 1;
 
+  printf("backward input params got\n");
+
   THArgCheck((offset->size[0] == batchSize), 3, "invalid batch size of offset");
   THCudaTensor_resize4d(state, gradInput, batchSize, nInputPlane, inputHeight, inputWidth);
   THCudaTensor_resize2d(state, columns, nInputPlane * kW * kH, im2col_step * outputHeight * outputWidth);
+
+  printf("backward input resize grad column\n");
 
   THCudaTensor *gradInput_n = THCudaTensor_new(state);
   THCudaTensor *gradOffset_n = THCudaTensor_new(state);
@@ -276,6 +310,8 @@ int deform_conv_backward_input_cuda(
   THCudaTensor_transpose(state, gradOutput, NULL, 1, 2);
   THCudaTensor_resize4d(state, gradOutput, batchSize / im2col_step, nOutputPlane, im2col_step * outputHeight, outputWidth);
 
+  printf("backward input re arrange grad output\n");
+
   THCudaTensor_resize5d(state, gradInput, batchSize / im2col_step, im2col_step, nInputPlane, inputHeight, inputWidth);
   THCudaTensor_resize5d(state, input, batchSize / im2col_step, im2col_step, nInputPlane, inputHeight, inputWidth);
   THCudaTensor_resize5d(state, gradOffset, batchSize / im2col_step, im2col_step,
@@ -283,7 +319,10 @@ int deform_conv_backward_input_cuda(
   THCudaTensor_resize5d(state, offset, batchSize / im2col_step, im2col_step,
       deformable_group * 2 * kH * kW, inputHeight, inputWidth);
 
-  for (int elt = 0; elt < batchSize; elt++) {
+  printf("backward input resize other inputs to 5d\n");
+
+  for (int elt = 0; elt < batchSize / im2col_step; elt++) {
+    printf("selecting input % in backward\n", elt);
     THCudaTensor_select(state, gradInput_n, gradInput, 0, elt);
     THCudaTensor_select(state, gradOffset_n, gradOffset, 0, elt);
     THCudaTensor_select(state, input_n, input, 0, elt);
@@ -299,6 +338,8 @@ int deform_conv_backward_input_cuda(
                      THCudaTensor_data(state, weight), m, 0.0f,
                      THCudaTensor_data(state, columns), n);
 
+    printf("sgemm complete\n");
+
     deformable_col2im_coord(
         THCState_getCurrentStream(state), THCudaTensor_data(state, columns),
         THCudaTensor_data(state, input_n), THCudaTensor_data(state, offset_n),
@@ -306,11 +347,14 @@ int deform_conv_backward_input_cuda(
         dilationH, dilationW, im2col_step, deformable_group,
         THCudaTensor_data(state, gradOffset_n));
 
+    printf("coord kernel complete\n");
+
     deformable_col2im(
         THCState_getCurrentStream(state), THCudaTensor_data(state, columns),
         THCudaTensor_data(state, offset_n), nInputPlane, inputHeight,
         inputWidth, kH, kW, padH, padW, dH, dW, dilationH, dilationW, im2col_step,
         deformable_group, THCudaTensor_data(state, gradInput_n));
+    printf("col2im kernel complete\n");
   }
 
   THCudaTensor_free(state, gradInput_n);
@@ -343,7 +387,7 @@ int deform_conv_backward_parameters_cuda(
     THCudaTensor *input, THCudaTensor *offset, THCudaTensor *gradOutput,
     THCudaTensor *gradWeight, /*THCudaTensor *gradBias, */
     THCudaTensor *columns, THCudaTensor *ones, int kW, int kH, int dW, int dH,
-    int padW, int padH, int dilationH, int dilationW, int deformable_group,
+    int padW, int padH, int dilationW, int dilationH, int deformable_group,
     float scale, int im2col_step) {
 
   // todo: transpose and reshape outGrad
@@ -352,8 +396,8 @@ int deform_conv_backward_parameters_cuda(
   THCAssertSameGPU(THCudaTensor_checkGPU(state, 5, input, offset, gradOutput,
                                          gradWeight, columns));
 
-  shape_check(state, input, offset, gradOutput, gradWeight, kH, kW, dH, dW,
-              padH, padW, dilationH, dilationW, deformable_group);
+  //shape_check(state, input, offset, gradOutput, gradWeight, kH, kW, dH, dW,
+  //            padH, padW, dilationH, dilationW, deformable_group);
 
   input = THCudaTensor_newContiguous(state, input);
   offset = THCudaTensor_newContiguous(state, offset);
@@ -384,7 +428,7 @@ int deform_conv_backward_parameters_cuda(
   THArgCheck((offset->size[0] == batchSize), 3, "invalid batch size of offset");
 
   THCudaTensor_resize2d(state, columns, nInputPlane * kW * kH,
-                        im2col_step, outputHeight * outputWidth);
+                        im2col_step * outputHeight * outputWidth);
 
   THCudaTensor *input_n = THCudaTensor_new(state);
   THCudaTensor *offset_n = THCudaTensor_new(state);
@@ -399,7 +443,7 @@ int deform_conv_backward_parameters_cuda(
   THCudaTensor_resize5d(state, offset, batchSize / im2col_step, im2col_step,
       deformable_group * 2 * kH * kW, inputHeight, inputWidth);
 
-  for (int elt = 0; elt < batchSize; elt++) {
+  for (int elt = 0; elt < batchSize / im2col_step; elt++) {
     THCudaTensor_select(state, input_n, input, 0, elt);
     THCudaTensor_select(state, offset_n, offset, 0, elt);
     THCudaTensor_select(state, gradOutput_n, gradOutput, 0, elt);
