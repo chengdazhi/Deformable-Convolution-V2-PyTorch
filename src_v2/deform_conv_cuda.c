@@ -225,6 +225,9 @@ int deform_conv_forward_cuda(THCudaTensor *input, THCudaTensor *weight,
   THCudaTensor_resize4d(state, output, batchSize, nOutputPlane, outputHeight, outputWidth);
   printf("after transpose in forward\n");
 
+  THCudaTensor_resize4d(state, input, batchSize, nInputPlane, inputHeight, inputWidth);
+  THCudaTensor_resize4d(state, offset, batchSize, deformable_group * 2 * kH * kW, inputHeight, inputWidth);
+
   THCudaTensor_free(state, input_n);
   THCudaTensor_free(state, offset_n);
   THCudaTensor_free(state, output_n);
@@ -357,6 +360,15 @@ int deform_conv_backward_input_cuda(
     printf("col2im kernel complete\n");
   }
 
+  THCudaTensor_resize5d(state, gradOutput, batchSize / im2col_step, nOutputPlane, im2col_step, outputHeight, outputWidth);
+  THCudaTensor_transpose(state, gradOutput, NULL, 1, 2);
+  THCudaTensor_resize4d(state, gradOutput, batchSize, nOutputPlane, outputHeight, outputWidth);
+
+  THCudaTensor_resize4d(state, gradInput, batchSize, nInputPlane, inputHeight, inputWidth);
+  THCudaTensor_resize4d(state, input, batchSize, nInputPlane, inputHeight, inputWidth);
+  THCudaTensor_resize4d(state, gradOffset, batchSize, deformable_group * 2 * kH * kW, inputHeight, inputWidth);
+  THCudaTensor_resize4d(state, offset, batchSize, deformable_group * 2 * kH * kW, inputHeight, inputWidth);
+
   THCudaTensor_free(state, gradInput_n);
   THCudaTensor_free(state, gradOffset_n);
   THCudaTensor_free(state, input_n);
@@ -467,6 +479,13 @@ int deform_conv_backward_parameters_cuda(
   THCudaTensor_free(state, input_n);
   THCudaTensor_free(state, offset_n);
   THCudaTensor_free(state, gradOutput_n);
+
+  THCudaTensor_resize5d(state, gradOutput, batchSize / im2col_step, nOutputPlane, im2col_step, outputHeight, outputWidth);
+  THCudaTensor_transpose(state, gradOutput, NULL, 1, 2);
+  THCudaTensor_resize4d(state, gradOutput, batchSize, nOutputPlane, outputHeight, outputWidth);
+
+  THCudaTensor_resize4d(state, input, batchSize, nInputPlane, inputHeight, inputWidth);
+  THCudaTensor_resize4d(state, offset, batchSize, deformable_group * 2 * kH * kW, inputHeight, inputWidth);
 
   if (batch == 0) {
     THCudaTensor_resize3d(state, gradOutput, nOutputPlane, outputHeight,
