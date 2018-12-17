@@ -109,3 +109,4 @@ mmdet/version.py
 data
 .vscode
 .idea
+work_dirs

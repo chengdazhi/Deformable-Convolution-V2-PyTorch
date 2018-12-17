@@ -12,6 +12,7 @@ from mmdet.datasets import build_dataloader
 from mmdet.models import RPN
 from .env import get_root_logger
 
+from .runner import MultiLRRunner
 
 def parse_losses(losses):
     log_vars = OrderedDict()
@@ -71,7 +72,7 @@ def _dist_train(model, dataset, cfg, validate=False):
     # put model on gpus
     model = MMDistributedDataParallel(model.cuda())
     # build runner
-    runner = Runner(model, batch_processor, cfg.optimizer, cfg.work_dir,
+    runner = MultiLRRunner(model, batch_processor, cfg.optimizer, cfg.work_dir,
                     cfg.log_level)
     # register hooks
     optimizer_config = DistOptimizerHook(**cfg.optimizer_config)
@@ -105,7 +106,7 @@ def _non_dist_train(model, dataset, cfg, validate=False):
     # put model on gpus
     model = MMDataParallel(model, device_ids=range(cfg.gpus)).cuda()
     # build runner
-    runner = Runner(model, batch_processor, cfg.optimizer, cfg.work_dir,
+    runner = MultiLRRunner(model, batch_processor, cfg.optimizer, cfg.work_dir,
                     cfg.log_level)
     runner.register_training_hooks(cfg.lr_config, cfg.optimizer_config,
                                    cfg.checkpoint_config, cfg.log_config)

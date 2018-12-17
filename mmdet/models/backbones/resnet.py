@@ -6,6 +6,7 @@ import torch.utils.checkpoint as cp
 from mmcv.cnn import constant_init, kaiming_init
 from mmcv.runner import load_checkpoint
 
+from ..dcn_v2.modules import ConvOffset2d
 
 def conv3x3(in_planes, out_planes, stride=1, dilation=1):
     "3x3 convolution with padding"
@@ -70,7 +71,10 @@ class Bottleneck(nn.Module):
                  dilation=1,
                  downsample=None,
                  style='pytorch',
-                 with_cp=False):
+                 with_cp=False,
+                 with_dcn=False,
+                 num_deformable_groups=1,
+                 dcn_offset_lr_mult=0.1):
         """Bottleneck block.
         If style is "pytorch", the stride-two layer is the 3x3 conv layer,
         if it is "caffe", the stride-two layer is the first 1x1 conv layer.
@@ -85,14 +89,33 @@ class Bottleneck(nn.Module):
             conv2_stride = 1
         self.conv1 = nn.Conv2d(
             inplanes, planes, kernel_size=1, stride=conv1_stride, bias=False)
-        self.conv2 = nn.Conv2d(
-            planes,
-            planes,
-            kernel_size=3,
-            stride=conv2_stride,
-            padding=dilation,
-            dilation=dilation,
-            bias=False)
+
+        self.with_dcn = with_dcn
+        if self.with_dcn:
+            print("--->> use dcn in block where c_in={} and c_out={}".format(inplanes, planes))
+            self.conv2_offset = nn.Conv2d(
+                planes,
+                num_deformable_groups * 18,
+                kernel_size=3,
+                stride=conv2_stride,
+                padding=dilation,
+                dilation=dilation)
+            self.conv2_offset.lr_mult = dcn_offset_lr_mult
+            self.conv2_offset.zero_init = True
+
+            self.conv2 = ConvOffset2d(planes, planes, (3, 3), stride=conv2_stride, 
+                padding=dilation, dilation=dilation, 
+                num_deformable_groups=num_deformable_groups)
+        else:
+            self.conv2 = nn.Conv2d(
+                planes,
+                planes,
+                kernel_size=3,
+                stride=conv2_stride,
+                padding=dilation,
+                dilation=dilation,
+                bias=False)
+
 
         self.bn1 = nn.BatchNorm2d(planes)
         self.bn2 = nn.BatchNorm2d(planes)
@@ -114,7 +137,11 @@ class Bottleneck(nn.Module):
             out = self.bn1(out)
             out = self.relu(out)
 
-            out = self.conv2(out)
+            if self.with_dcn:
+                offset = self.conv2_offset(out)
+                out = self.conv2(out, offset)
+            else:
+                out = self.conv2(out)
             out = self.bn2(out)
             out = self.relu(out)
 
@@ -145,7 +172,9 @@ def make_res_layer(block,
                    stride=1,
                    dilation=1,
                    style='pytorch',
-                   with_cp=False):
+                   with_cp=False,
+                   with_dcn=False,
+                   dcn_offset_lr_mult=0.1):
     downsample = None
     if stride != 1 or inplanes != planes * block.expansion:
         downsample = nn.Sequential(
@@ -167,11 +196,14 @@ def make_res_layer(block,
             dilation,
             downsample,
             style=style,
-            with_cp=with_cp))
+            with_cp=with_cp,
+            with_dcn=with_dcn,
+            dcn_offset_lr_mult=dcn_offset_lr_mult))
     inplanes = planes * block.expansion
     for i in range(1, blocks):
         layers.append(
-            block(inplanes, planes, 1, dilation, style=style, with_cp=with_cp))
+            block(inplanes, planes, 1, dilation, style=style, with_cp=with_cp, with_dcn=with_dcn, 
+                  dcn_offset_lr_mult=dcn_offset_lr_mult))
 
     return nn.Sequential(*layers)
 
@@ -215,7 +247,10 @@ class ResNet(nn.Module):
                  frozen_stages=-1,
                  bn_eval=True,
                  bn_frozen=False,
-                 with_cp=False):
+                 with_cp=False,
+                 with_dcn=False,
+                 dcn_start_stage=3,
+                 dcn_offset_lr_mult=0.1):
         super(ResNet, self).__init__()
         if depth not in self.arch_settings:
             raise KeyError('invalid depth {} for resnet'.format(depth))
@@ -244,6 +279,9 @@ class ResNet(nn.Module):
             stride = strides[i]
             dilation = dilations[i]
             planes = 64 * 2**i
+            use_dcn = False
+            if with_dcn and i >= (dcn_start_stage - 2):
+                use_dcn = True
             res_layer = make_res_layer(
                 block,
                 self.inplanes,
@@ -252,7 +290,9 @@ class ResNet(nn.Module):
                 stride=stride,
                 dilation=dilation,
                 style=self.style,
-                with_cp=with_cp)
+                with_cp=with_cp,
+                with_dcn=use_dcn,
+                dcn_offset_lr_mult=dcn_offset_lr_mult)
             self.inplanes = planes * block.expansion
             layer_name = 'layer{}'.format(i + 1)
             self.add_module(layer_name, res_layer)
@@ -264,10 +304,16 @@ class ResNet(nn.Module):
         if isinstance(pretrained, str):
             logger = logging.getLogger()
             load_checkpoint(self, pretrained, strict=False, logger=logger)
+            for m in self.modules():
+                if isinstance(m, nn.Conv2d) and hasattr(m, 'zero_init') and m.zero_init:
+                    constant_init(m, 0)
         elif pretrained is None:
             for m in self.modules():
                 if isinstance(m, nn.Conv2d):
-                    kaiming_init(m)
+                    if hasattr(m, 'zero_init') and m.zero_init:
+                        constant_init(m, 0)
+                    else:
+                        kaiming_init(m)
                 elif isinstance(m, nn.BatchNorm2d):
                     constant_init(m, 1)
         else:
