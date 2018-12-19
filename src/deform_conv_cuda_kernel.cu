@@ -380,6 +380,8 @@ inline void deformable_col2im(cudaStream_t stream,
   const int parallel_imgs, const int deformable_group,
   DType* grad_im) {
 
+
+
   // todo: make sure parallel_imgs is passed in correctly
   int height_col = (height + 2 * pad_h - (dilation_h * (ksize_h - 1) + 1)) / stride_h + 1;
   int width_col = (width + 2 * pad_w - (dilation_w * (ksize_w - 1) + 1)) / stride_w + 1;

@@ -34,7 +34,6 @@ class ConvOffset2dFunction(Function):
         self.im2col_step = im2col_step
 
     def forward(self, input, offset, weight):
-        print("--->> forward start")
         self.save_for_backward(input, offset, weight)
 
         output = input.new(*self._output_size(input, weight))
@@ -58,11 +57,9 @@ class ConvOffset2dFunction(Function):
                 weight.size(3), weight.size(2), self.stride[1], self.stride[0],
                 self.padding[1], self.padding[0], self.dilation[1],
                 self.dilation[0], self.deformable_groups, cur_im2col_step)
-        print("--->> forward complete")
         return output
 
     def backward(self, grad_output):
-        print("--->> backward start")
         input, offset, weight = self.saved_tensors
 
         grad_input = grad_offset = grad_weight = None
@@ -81,7 +78,6 @@ class ConvOffset2dFunction(Function):
             assert (input.shape[0] % cur_im2col_step) == 0, 'im2col step must divide batchsize'
 
             if self.needs_input_grad[0] or self.needs_input_grad[1]:
-                print(self.stride[1], self.stride[0], self.dilation[1], self.dilation[0])
                 grad_input = input.new(*input.size()).zero_()
                 grad_offset = offset.new(*offset.size()).zero_()
                 deform_conv.deform_conv_backward_input_cuda(
@@ -91,7 +87,6 @@ class ConvOffset2dFunction(Function):
                     self.padding[1], self.padding[0], self.dilation[1],
                     self.dilation[0], self.deformable_groups, cur_im2col_step)
 
-            print("--->> backward input grad got")
 
             if self.needs_input_grad[2]:
                 grad_weight = weight.new(*weight.size()).zero_()
@@ -101,7 +96,6 @@ class ConvOffset2dFunction(Function):
                     weight.size(2), self.stride[1], self.stride[0],
                     self.padding[1], self.padding[0], self.dilation[1],
                     self.dilation[0], self.deformable_groups, 1, cur_im2col_step)
-            print("--->> backward weight grad got")
 
         return grad_input, grad_offset, grad_weight
 

@@ -1,4 +1,5 @@
 #include <THC/THC.h>
+#include <cstdio>
 
 #include "deform_conv_cuda_kernel.h"
 
@@ -65,7 +66,7 @@ void shape_check(THCState *state, THCudaTensor *input, THCudaTensor *offset,
   long nInputPlane = THCudaTensor_size(state, weight, 1);
   long inputHeight = THCudaTensor_size(state, input, dimh);
   long inputWidth = THCudaTensor_size(state, input, dimw);
-  long nOutputPlane = THCudaTensor_size(state, weight, 0);5
+  long nOutputPlane = THCudaTensor_size(state, weight, 0);
   long outputHeight = (inputHeight + 2 * padH - (dilationH * (kH - 1) + 1)) / dH + 1;
   long outputWidth = (inputWidth + 2 * padW - (dilationW * (kW - 1) + 1)) / dW + 1;
 
@@ -161,8 +162,7 @@ int deform_conv_forward_cuda(THCudaTensor *input, THCudaTensor *weight,
 
   // bias = bias ? THCudaTensor_newContiguous(state, bias) : bias;
 
-  // todo: change shape
-  THCudaTensor_resize4d(state, output, batchSize / im2col_step, nOutputPlane, im2col_step * outputHeight, outputWidth);
+  THCudaTensor_resize5d(state, output, batchSize / im2col_step, im2col_step, nOutputPlane, outputHeight, outputWidth);
   THCudaTensor_resize2d(state, columns, nInputPlane * kW * kH, im2col_step * outputHeight * outputWidth);
 
   if (THCudaTensor_nDimension(state, ones) != 2 || THCudaTensor_size(state, ones, 0) *
@@ -175,6 +175,9 @@ int deform_conv_forward_cuda(THCudaTensor *input, THCudaTensor *weight,
   THCudaTensor *offset_n = THCudaTensor_new(state);
   THCudaTensor *output_n = THCudaTensor_new(state);
 
+  THCudaTensor *output_buffer = THCudaTensor_new(state);
+  THCudaTensor_resize4d(state, output_buffer, batchSize / im2col_step, nOutputPlane, im2col_step * outputHeight, outputWidth);
+
   THCudaTensor_resize5d(state, input, batchSize / im2col_step, im2col_step, nInputPlane, inputHeight, inputWidth);
   THCudaTensor_resize5d(state, offset, batchSize / im2col_step, im2col_step,
       deformable_group * 2 * kH * kW, outputHeight, outputWidth);
@@ -183,7 +186,7 @@ int deform_conv_forward_cuda(THCudaTensor *input, THCudaTensor *weight,
 
     THCudaTensor_select(state, input_n, input, 0, elt);
     THCudaTensor_select(state, offset_n, offset, 0, elt);
-    THCudaTensor_select(state, output_n, output, 0, elt);
+    THCudaTensor_select(state, output_n, output_buffer, 0, elt);
 
     // long m_ = nOutputPlane;
     // long n_ = outputHeight * outputWidth;
@@ -218,9 +221,10 @@ int deform_conv_forward_cuda(THCudaTensor *input, THCudaTensor *weight,
                      THCudaTensor_data(state, output_n), n);
   }
 
-  // todo: transpose output
-  THCudaTensor_resize5d(state, output, batchSize / im2col_step, nOutputPlane, im2col_step, outputHeight, outputWidth);
-  THCudaTensor_transpose(state, output, NULL, 1, 2);
+  // the reason I use seemingly redundant output_buffer is that THCudaTensor API handles successive transpose and resize poorly
+  THCudaTensor_resize5d(state, output_buffer, batchSize / im2col_step, nOutputPlane, im2col_step, outputHeight, outputWidth);
+  THCudaTensor_transpose(state, output_buffer, NULL, 1, 2);
+  THCudaTensor_copy(state, output, output_buffer);
   THCudaTensor_resize4d(state, output, batchSize, nOutputPlane, outputHeight, outputWidth);
 
   THCudaTensor_resize4d(state, input, batchSize, nInputPlane, inputHeight, inputWidth);
@@ -229,6 +233,7 @@ int deform_conv_forward_cuda(THCudaTensor *input, THCudaTensor *weight,
   THCudaTensor_free(state, input_n);
   THCudaTensor_free(state, offset_n);
   THCudaTensor_free(state, output_n);
+  THCudaTensor_free(state, output_buffer);
 
   if (batch == 0) {
     THCudaTensor_resize3d(state, output, nOutputPlane, outputHeight, outputWidth);
@@ -251,12 +256,6 @@ int deform_conv_backward_input_cuda(
     THCudaTensor *columns, int kW, int kH, int dW, int dH, int padW, int padH,
     int dilationW, int dilationH, int deformable_group, int im2col_step) {
 
-  // todo: transpose and reshape outGrad
-  // todo: reshape columns
-  // todo: add im2col_step as input
-  // todo: understand why backward im2col doesn't need transpose: because im2col calculates gradient to weight, and is cumulative across batch
-
-
   THCAssertSameGPU(THCudaTensor_checkGPU(state, 6, input, gradOutput, weight,
                                          offset, columns, gradInput));
 
@@ -269,14 +268,6 @@ int deform_conv_backward_input_cuda(
   weight = THCudaTensor_newContiguous(state, weight);
 
   int batch = 1;
-//  if (input->nDimension == 3) {
-//    // Force batch
-//    batch = 0;
-//    THCudaTensor_resize4d(state, input, 1, input->size[0], input->size[1], input->size[2]);
-//    THCudaTensor_resize4d(state, offset, 1, offset->size[0], offset->size[1], offset->size[2]);
-//    THCudaTensor_resize4d(state, gradOutput, 1, gradOutput->size[0],
-//                          gradOutput->size[1], gradOutput->size[2]);
-//  }
 
   if (THCudaTensor_nDimension(state, input) == 3) {
     // Force batch
@@ -288,13 +279,6 @@ int deform_conv_backward_input_cuda(
     THCudaTensor_resize4d(state, gradOutput, 1, THCudaTensor_size(state, gradOutput, 0),
                           THCudaTensor_size(state, gradOutput, 1), THCudaTensor_size(state, gradOutput, 2));
   }
-
-//  long batchSize = input->size[0];
-//  long nInputPlane = input->size[1];
-//  long inputHeight = input->size[2];
-//  long inputWidth = input->size[3];
-//
-//  long nOutputPlane = weight->size[0];
 
   long batchSize = THCudaTensor_size(state, input, 0);
   long nInputPlane = THCudaTensor_size(state, input, 1);
@@ -320,7 +304,14 @@ int deform_conv_backward_input_cuda(
   // change order of grad output
   THCudaTensor_resize5d(state, gradOutput, batchSize / im2col_step, im2col_step, nOutputPlane, outputHeight, outputWidth);
   THCudaTensor_transpose(state, gradOutput, NULL, 1, 2);
-  THCudaTensor_resize4d(state, gradOutput, batchSize / im2col_step, nOutputPlane, im2col_step * outputHeight, outputWidth);
+
+  THCudaTensor *gradOutputBuffer = THCudaTensor_new(state);
+  THCudaTensor_resize5d(state, gradOutputBuffer, batchSize / im2col_step, nOutputPlane, im2col_step, outputHeight, outputWidth);
+  THCudaTensor_copy(state, gradOutputBuffer, gradOutput);
+  THCudaTensor_resize4d(state, gradOutputBuffer, batchSize / im2col_step, nOutputPlane, im2col_step * outputHeight, outputWidth);
+
+  THCudaTensor_transpose(state, gradOutput, NULL, 1, 2);
+  THCudaTensor_resize4d(state, gradOutput, batchSize, nOutputPlane, outputHeight, outputWidth);
 
   THCudaTensor_resize5d(state, gradInput, batchSize / im2col_step, im2col_step, nInputPlane, inputHeight, inputWidth);
   THCudaTensor_resize5d(state, input, batchSize / im2col_step, im2col_step, nInputPlane, inputHeight, inputWidth);
@@ -335,7 +326,7 @@ int deform_conv_backward_input_cuda(
     THCudaTensor_select(state, gradOffset_n, gradOffset, 0, elt);
     THCudaTensor_select(state, input_n, input, 0, elt);
     THCudaTensor_select(state, offset_n, offset, 0, elt);
-    THCudaTensor_select(state, gradOutput_n, gradOutput, 0, elt);
+    THCudaTensor_select(state, gradOutput_n, gradOutputBuffer, 0, elt);
 
     long m = nInputPlane * kW * kH;
     long n = THCudaTensor_size(state, columns, 1);
@@ -361,10 +352,6 @@ int deform_conv_backward_input_cuda(
         deformable_group, THCudaTensor_data(state, gradInput_n));
   }
 
-  THCudaTensor_resize5d(state, gradOutput, batchSize / im2col_step, nOutputPlane, im2col_step, outputHeight, outputWidth);
-  THCudaTensor_transpose(state, gradOutput, NULL, 1, 2);
-  THCudaTensor_resize4d(state, gradOutput, batchSize, nOutputPlane, outputHeight, outputWidth);
-
   THCudaTensor_resize4d(state, gradInput, batchSize, nInputPlane, inputHeight, inputWidth);
   THCudaTensor_resize4d(state, input, batchSize, nInputPlane, inputHeight, inputWidth);
   THCudaTensor_resize4d(state, gradOffset, batchSize, deformable_group * 2 * kH * kW, outputHeight, outputWidth);
@@ -375,6 +362,7 @@ int deform_conv_backward_input_cuda(
   THCudaTensor_free(state, input_n);
   THCudaTensor_free(state, offset_n);
   THCudaTensor_free(state, gradOutput_n);
+  THCudaTensor_free(state, gradOutputBuffer);
 
   if (batch == 0) {
     THCudaTensor_resize3d(state, gradOutput, nOutputPlane, outputHeight,
@@ -417,15 +405,6 @@ int deform_conv_backward_parameters_cuda(
   gradOutput = THCudaTensor_newContiguous(state, gradOutput);
 
   int batch = 1;
-//  if (input->nDimension == 3) {
-//    // Force batch
-//    batch = 0;
-//    THCudaTensor_resize4d(state, input, 1, input->size[0], input->size[1],
-//                          input->size[2]);
-//    THCudaTensor_resize4d(state, gradOutput, 1, gradOutput->size[0],
-//                          gradOutput->size[1], gradOutput->size[2]);
-//  }
-
 
   if (THCudaTensor_nDimension(state, input) == 3) {
     // Force batch
@@ -436,13 +415,6 @@ int deform_conv_backward_parameters_cuda(
                           THCudaTensor_size(state, gradOutput, 1), THCudaTensor_size(state, gradOutput, 2));
   }
 
-//  long batchSize = input->size[0];
-//  long nInputPlane = input->size[1];
-//  long inputHeight = input->size[2];
-//  long inputWidth = input->size[3];
-//
-//  long nOutputPlane = gradWeight->size[0];
-//
   long batchSize = THCudaTensor_size(state, input, 0);
   long nInputPlane = THCudaTensor_size(state, input, 1);
   long inputHeight = THCudaTensor_size(state, input, 2);
@@ -462,10 +434,17 @@ int deform_conv_backward_parameters_cuda(
   THCudaTensor *offset_n = THCudaTensor_new(state);
   THCudaTensor *gradOutput_n = THCudaTensor_new(state);
 
-  // change order of grad output
   THCudaTensor_resize5d(state, gradOutput, batchSize / im2col_step, im2col_step, nOutputPlane, outputHeight, outputWidth);
   THCudaTensor_transpose(state, gradOutput, NULL, 1, 2);
-  THCudaTensor_resize4d(state, gradOutput, batchSize / im2col_step, nOutputPlane, im2col_step * outputHeight, outputWidth);
+
+  THCudaTensor *gradOutputBuffer = THCudaTensor_new(state);
+  THCudaTensor_resize5d(state, gradOutputBuffer, batchSize / im2col_step, nOutputPlane, im2col_step, outputHeight, outputWidth);
+  THCudaTensor_copy(state, gradOutputBuffer, gradOutput);
+  THCudaTensor_resize4d(state, gradOutputBuffer, batchSize / im2col_step, nOutputPlane, im2col_step * outputHeight, outputWidth);
+
+  THCudaTensor_transpose(state, gradOutput, NULL, 1, 2);
+  THCudaTensor_resize4d(state, gradOutput, batchSize, nOutputPlane, outputHeight, outputWidth);
+
 
   THCudaTensor_resize5d(state, input, batchSize / im2col_step, im2col_step, nInputPlane, inputHeight, inputWidth);
   THCudaTensor_resize5d(state, offset, batchSize / im2col_step, im2col_step,
@@ -474,7 +453,7 @@ int deform_conv_backward_parameters_cuda(
   for (int elt = 0; elt < batchSize / im2col_step; elt++) {
     THCudaTensor_select(state, input_n, input, 0, elt);
     THCudaTensor_select(state, offset_n, offset, 0, elt);
-    THCudaTensor_select(state, gradOutput_n, gradOutput, 0, elt);
+    THCudaTensor_select(state, gradOutput_n, gradOutputBuffer, 0, elt);
 
     deformable_im2col(
         THCState_getCurrentStream(state), THCudaTensor_data(state, input_n),
@@ -495,10 +474,7 @@ int deform_conv_backward_parameters_cuda(
   THCudaTensor_free(state, input_n);
   THCudaTensor_free(state, offset_n);
   THCudaTensor_free(state, gradOutput_n);
-
-  THCudaTensor_resize5d(state, gradOutput, batchSize / im2col_step, nOutputPlane, im2col_step, outputHeight, outputWidth);
-  THCudaTensor_transpose(state, gradOutput, NULL, 1, 2);
-  THCudaTensor_resize4d(state, gradOutput, batchSize, nOutputPlane, outputHeight, outputWidth);
+  THCudaTensor_free(state, gradOutputBuffer);
 
   THCudaTensor_resize4d(state, input, batchSize, nInputPlane, inputHeight, inputWidth);
   THCudaTensor_resize4d(state, offset, batchSize, deformable_group * 2 * kH * kW, outputHeight, outputWidth);
