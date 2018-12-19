@@ -74,7 +74,8 @@ class Bottleneck(nn.Module):
                  with_cp=False,
                  with_dcn=False,
                  num_deformable_groups=1,
-                 dcn_offset_lr_mult=0.1):
+                 dcn_offset_lr_mult=0.1,
+                 use_regular_conv_on_stride=False):
         """Bottleneck block.
         If style is "pytorch", the stride-two layer is the 3x3 conv layer,
         if it is "caffe", the stride-two layer is the first 1x1 conv layer.
@@ -91,6 +92,8 @@ class Bottleneck(nn.Module):
             inplanes, planes, kernel_size=1, stride=conv1_stride, bias=False)
 
         self.with_dcn = with_dcn
+        if use_regular_conv_on_stride and stride > 1:
+            self.with_dcn = False
         if self.with_dcn:
             print("--->> use dcn in block where c_in={} and c_out={}".format(inplanes, planes))
             self.conv2_offset = nn.Conv2d(
@@ -174,7 +177,8 @@ def make_res_layer(block,
                    style='pytorch',
                    with_cp=False,
                    with_dcn=False,
-                   dcn_offset_lr_mult=0.1):
+                   dcn_offset_lr_mult=0.1,
+                   use_regular_conv_on_stride=False):
     downsample = None
     if stride != 1 or inplanes != planes * block.expansion:
         downsample = nn.Sequential(
@@ -198,12 +202,13 @@ def make_res_layer(block,
             style=style,
             with_cp=with_cp,
             with_dcn=with_dcn,
-            dcn_offset_lr_mult=dcn_offset_lr_mult))
+            dcn_offset_lr_mult=dcn_offset_lr_mult,
+            use_regular_conv_on_stride=use_regular_conv_on_stride))
     inplanes = planes * block.expansion
     for i in range(1, blocks):
         layers.append(
             block(inplanes, planes, 1, dilation, style=style, with_cp=with_cp, with_dcn=with_dcn, 
-                  dcn_offset_lr_mult=dcn_offset_lr_mult))
+                  dcn_offset_lr_mult=dcn_offset_lr_mult, use_regular_conv_on_stride=use_regular_conv_on_stride))
 
     return nn.Sequential(*layers)
 
@@ -250,7 +255,8 @@ class ResNet(nn.Module):
                  with_cp=False,
                  with_dcn=False,
                  dcn_start_stage=3,
-                 dcn_offset_lr_mult=0.1):
+                 dcn_offset_lr_mult=0.1,
+                 use_regular_conv_on_stride=False):
         super(ResNet, self).__init__()
         if depth not in self.arch_settings:
             raise KeyError('invalid depth {} for resnet'.format(depth))
@@ -292,7 +298,8 @@ class ResNet(nn.Module):
                 style=self.style,
                 with_cp=with_cp,
                 with_dcn=use_dcn,
-                dcn_offset_lr_mult=dcn_offset_lr_mult)
+                dcn_offset_lr_mult=dcn_offset_lr_mult,
+                use_regular_conv_on_stride=use_regular_conv_on_stride)
             self.inplanes = planes * block.expansion
             layer_name = 'layer{}'.format(i + 1)
             self.add_module(layer_name, res_layer)
