@@ -1,5 +1,6 @@
 import logging
 
+import torch
 import torch.nn as nn
 import torch.utils.checkpoint as cp
 
@@ -7,6 +8,7 @@ from mmcv.cnn import constant_init, kaiming_init
 from mmcv.runner import load_checkpoint
 
 from ..dcn_v2.modules import ConvOffset2d
+from ..mod_dcn.dcn_v2 import DCNv2
 
 def conv3x3(in_planes, out_planes, stride=1, dilation=1):
     "3x3 convolution with padding"
@@ -75,7 +77,8 @@ class Bottleneck(nn.Module):
                  with_dcn=False,
                  num_deformable_groups=1,
                  dcn_offset_lr_mult=0.1,
-                 use_regular_conv_on_stride=False):
+                 use_regular_conv_on_stride=False,
+                 use_modulated_dcn=False):
         """Bottleneck block.
         If style is "pytorch", the stride-two layer is the 3x3 conv layer,
         if it is "caffe", the stride-two layer is the first 1x1 conv layer.
@@ -92,23 +95,40 @@ class Bottleneck(nn.Module):
             inplanes, planes, kernel_size=1, stride=conv1_stride, bias=False)
 
         self.with_dcn = with_dcn
+        self.use_modulated_dcn = use_modulated_dcn
         if use_regular_conv_on_stride and stride > 1:
             self.with_dcn = False
         if self.with_dcn:
-            print("--->> use dcn in block where c_in={} and c_out={}".format(inplanes, planes))
-            self.conv2_offset = nn.Conv2d(
-                planes,
-                num_deformable_groups * 18,
-                kernel_size=3,
-                stride=conv2_stride,
-                padding=dilation,
-                dilation=dilation)
-            self.conv2_offset.lr_mult = dcn_offset_lr_mult
-            self.conv2_offset.zero_init = True
+            print("--->> use {}dcn in block where c_in={} and c_out={}".format(
+                'modulated ' if self.use_modulated_dcn else '', inplanes, planes))
+            if use_modulated_dcn:
+                self.conv_offset_mask = nn.Conv2d(
+                    planes,
+                    num_deformable_groups * 27,
+                    kernel_size=3,
+                    stride=conv2_stride,
+                    padding=dilation,
+                    dilation=dilation)
+                self.conv_offset_mask.lr_mult = dcn_offset_lr_mult
+                self.conv_offset_mask.zero_init = True
 
-            self.conv2 = ConvOffset2d(planes, planes, (3, 3), stride=conv2_stride, 
-                padding=dilation, dilation=dilation, 
-                num_deformable_groups=num_deformable_groups)
+                self.conv2 = DCNv2(planes, planes, 3, stride=conv2_stride,
+                                          padding=dilation, dilation=dilation,
+                                          deformable_groups=num_deformable_groups, no_bias=True)
+            else:
+                self.conv2_offset = nn.Conv2d(
+                    planes,
+                    num_deformable_groups * 18,
+                    kernel_size=3,
+                    stride=conv2_stride,
+                    padding=dilation,
+                    dilation=dilation)
+                self.conv2_offset.lr_mult = dcn_offset_lr_mult
+                self.conv2_offset.zero_init = True
+
+                self.conv2 = ConvOffset2d(planes, planes, (3, 3), stride=conv2_stride,
+                    padding=dilation, dilation=dilation,
+                    num_deformable_groups=num_deformable_groups)
         else:
             self.conv2 = nn.Conv2d(
                 planes,
@@ -141,8 +161,15 @@ class Bottleneck(nn.Module):
             out = self.relu(out)
 
             if self.with_dcn:
-                offset = self.conv2_offset(out)
-                out = self.conv2(out, offset)
+                if self.use_modulated_dcn:
+                    offset_mask = self.conv_offset_mask(out)
+                    offset1, offset2, mask_raw = torch.chunk(offset_mask, 3, dim=1)
+                    offset = torch.cat((offset1, offset2), dim=1)
+                    mask = torch.sigmoid(mask_raw)
+                    out = self.conv2(out, offset, mask)
+                else:
+                    offset = self.conv2_offset(out)
+                    out = self.conv2(out, offset)
             else:
                 out = self.conv2(out)
             out = self.bn2(out)
@@ -178,7 +205,8 @@ def make_res_layer(block,
                    with_cp=False,
                    with_dcn=False,
                    dcn_offset_lr_mult=0.1,
-                   use_regular_conv_on_stride=False):
+                   use_regular_conv_on_stride=False,
+                   use_modulated_dcn=False):
     downsample = None
     if stride != 1 or inplanes != planes * block.expansion:
         downsample = nn.Sequential(
@@ -203,12 +231,14 @@ def make_res_layer(block,
             with_cp=with_cp,
             with_dcn=with_dcn,
             dcn_offset_lr_mult=dcn_offset_lr_mult,
-            use_regular_conv_on_stride=use_regular_conv_on_stride))
+            use_regular_conv_on_stride=use_regular_conv_on_stride,
+            use_modulated_dcn=use_modulated_dcn))
     inplanes = planes * block.expansion
     for i in range(1, blocks):
         layers.append(
             block(inplanes, planes, 1, dilation, style=style, with_cp=with_cp, with_dcn=with_dcn, 
-                  dcn_offset_lr_mult=dcn_offset_lr_mult, use_regular_conv_on_stride=use_regular_conv_on_stride))
+                  dcn_offset_lr_mult=dcn_offset_lr_mult, use_regular_conv_on_stride=use_regular_conv_on_stride,
+                  use_modulated_dcn=use_modulated_dcn))
 
     return nn.Sequential(*layers)
 
@@ -256,7 +286,8 @@ class ResNet(nn.Module):
                  with_dcn=False,
                  dcn_start_stage=3,
                  dcn_offset_lr_mult=0.1,
-                 use_regular_conv_on_stride=False):
+                 use_regular_conv_on_stride=False,
+                 use_modulated_dcn=False):
         super(ResNet, self).__init__()
         if depth not in self.arch_settings:
             raise KeyError('invalid depth {} for resnet'.format(depth))
@@ -299,7 +330,8 @@ class ResNet(nn.Module):
                 with_cp=with_cp,
                 with_dcn=use_dcn,
                 dcn_offset_lr_mult=dcn_offset_lr_mult,
-                use_regular_conv_on_stride=use_regular_conv_on_stride)
+                use_regular_conv_on_stride=use_regular_conv_on_stride,
+                use_modulated_dcn=use_modulated_dcn)
             self.inplanes = planes * block.expansion
             layer_name = 'layer{}'.format(i + 1)
             self.add_module(layer_name, res_layer)
