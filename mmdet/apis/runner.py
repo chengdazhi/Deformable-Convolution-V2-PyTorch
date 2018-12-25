@@ -23,6 +23,12 @@ class MultiLRRunner(Runner):
             base_lr = optimizer['lr']
             for m in self.model.modules():
                 if len([_ for _ in m.children()]) > 0:
+                    children_params = []
+                    for child in m.children():
+                        children_params += [id(_) for _ in child.parameters()]
+                    for _param in [_ for _ in m.parameters()]:
+                        if id(_param) not in children_params:
+                            lr_mult_dict[1.].append(_param)
                     continue # not simplest node
                 if hasattr(m, 'lr_mult'):
                     if m.lr_mult not in lr_mult_dict.keys():
