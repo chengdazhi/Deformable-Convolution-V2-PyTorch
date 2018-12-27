@@ -1,5 +1,4 @@
 #include <THC/THC.h>
-#include <cstdio>
 
 #include "deform_conv_cuda_kernel.h"
 

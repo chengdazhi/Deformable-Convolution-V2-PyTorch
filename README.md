@@ -7,7 +7,6 @@ Ported from the original [MXNet implementation](https://github.com/msracver/Defo
 
 ```
 sh make.sh
-CC=g++ python build.py
 ```
 
 See `test.py` for example usage.
