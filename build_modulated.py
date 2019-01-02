@@ -14,8 +14,8 @@ if torch.cuda.is_available():
     sources += ['src/modulated_dcn_cuda.c']
     headers += ['src/modulated_dcn_cuda.h']
     defines += [('WITH_CUDA', None)]
-    extra_objects += ['src/cuda/modulated_deform_im2col_cuda.cu.o']
-    extra_objects += ['src/cuda/deform_psroi_pooling_cuda.cu.o']
+    extra_objects += ['src/cuda/modulated_deform_im2col_cuda.cu.so']
+    extra_objects += ['src/cuda/deform_psroi_pooling_cuda.cu.so']
     with_cuda = True
 else:
     raise ValueError('CUDA is not available')

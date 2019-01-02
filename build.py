@@ -18,7 +18,7 @@ if torch.cuda.is_available():
 
 this_file = os.path.dirname(os.path.realpath(__file__))
 print(this_file)
-extra_objects = ['src/deform_conv_cuda_kernel.cu.o']
+extra_objects = ['src/deform_conv_cuda_kernel.cu.so']
 extra_objects = [os.path.join(this_file, fname) for fname in extra_objects]
 
 ffi = create_extension(

@@ -1,4 +1,4 @@
 .idea
-*.o
+*.so
 _ext*
 __pycache__
