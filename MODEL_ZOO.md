@@ -119,6 +119,17 @@ We released RPN, Faster R-CNN and Mask R-CNN models in the first version. More m
 | R-101-FPN | pytorch | 1x      | 10.9     | 1.055               | 5.2            | 42.7   | 37.1    | [model](https://s3.ap-northeast-2.amazonaws.com/open-mmlab/mmdetection/models/cascade_mask_rcnn_r101_fpn_1x_20181129-64f00602.pth) |
 | R-101-FPN | pytorch | 20e     | 10.9     | 1.055               | 5.2            | 43.4   | 37.6    | [model](https://s3.ap-northeast-2.amazonaws.com/open-mmlab/mmdetection/models/cascade_mask_rcnn_r101_fpn_20e_20181129-cb85151d.pth) |
 
+### Deformable Conv V2
+
+**following speed tested on 8 titan xps**
+
+| Backbone | Style   | Lr schd | Train time (s/iter) |  box AP | 
+|:-----------------------------------:|:-------:|:-------:|:--------:|:-------------------:|
+| R-50-FPN | pytorch | 1x      | 0.63                |  36.4   |
+| R-50-FPN-DeformConv-Res345 | pytorch | 1x  |     0.78        | 40.2   | 
+| R-50-FPN-ModulatedDeformConv-Res345 | pytorch | 1x   | 0.78         | 40.5   | 
+| R-50-FPN-ModulatedDeformPool | pytorch | 1x       | 0.91        | 38.2   |
+| R-101-FPN-Cascade-DeformConv-Res345 | pytorch | 1x       | --       | 45.1   |
 
 ## Comparison with Detectron
 
