@@ -6,7 +6,7 @@ from __future__ import division
 import torch
 from torch.autograd import Function
 
-from _ext import modulated_dcn as _backend
+from .._ext import modulated_dcn as _backend
 
 
 class ModulatedDeformConvFunction(Function):

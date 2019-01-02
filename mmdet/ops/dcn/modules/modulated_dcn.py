@@ -87,6 +87,7 @@ class DeformRoIPooling(nn.Module):
         super(DeformRoIPooling, self).__init__()
         self.spatial_scale = spatial_scale
         self.pooled_size = pooled_size
+        self.out_size = pooled_size
         self.output_dim = output_dim
         self.no_trans = no_trans
         self.group_size = group_size

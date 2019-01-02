@@ -2,7 +2,7 @@ import torch
 from torch.autograd import Function
 from torch.nn.modules.utils import _pair
 
-from _ext import deform_conv
+from .._ext import deform_conv
 
 
 def deform_conv_function(input,

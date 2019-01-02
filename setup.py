@@ -90,7 +90,7 @@ if __name__ == '__main__':
         keywords='computer vision, object detection',
         url='https://github.com/open-mmlab/mmdetection',
         packages=find_packages(),
-        package_data={'mmdet.ops': ['*/*.so']},
+        package_data={'mmdet.ops': ['*/*.so', '*/*/*/*.so']},
         classifiers=[
             'Development Status :: 4 - Beta',
             'License :: OSI Approved :: Apache Software License',
