@@ -7,9 +7,7 @@ import torch.utils.checkpoint as cp
 from mmcv.cnn import constant_init, kaiming_init
 from mmcv.runner import load_checkpoint
 
-from ..dcn_v2.modules import ConvOffset2d
-from ..mod_dcn.dcn_v2 import DCNv2
-from ..cc_attention.functions import CrissCrossAttention
+from mmdet import ops
 
 def conv3x3(in_planes, out_planes, stride=1, dilation=1):
     "3x3 convolution with padding"
@@ -79,10 +77,7 @@ class Bottleneck(nn.Module):
                  num_deformable_groups=1,
                  dcn_offset_lr_mult=0.1,
                  use_regular_conv_on_stride=False,
-                 use_modulated_dcn=False,
-                 use_non_local=False,
-                 non_local_position='after_relu',
-                 non_local_recurrence=2):
+                 use_modulated_dcn=False):
         """Bottleneck block.
         If style is "pytorch", the stride-two layer is the 3x3 conv layer,
         if it is "caffe", the stride-two layer is the first 1x1 conv layer.
@@ -116,7 +111,7 @@ class Bottleneck(nn.Module):
                 self.conv_offset_mask.lr_mult = dcn_offset_lr_mult
                 self.conv_offset_mask.zero_init = True
 
-                self.conv2 = DCNv2(planes, planes, 3, stride=conv2_stride,
+                self.conv2 = ops.ModulatedDeformConv(planes, planes, 3, stride=conv2_stride,
                                           padding=dilation, dilation=dilation,
                                           deformable_groups=num_deformable_groups, no_bias=True)
             else:
@@ -130,7 +125,7 @@ class Bottleneck(nn.Module):
                 self.conv2_offset.lr_mult = dcn_offset_lr_mult
                 self.conv2_offset.zero_init = True
 
-                self.conv2 = ConvOffset2d(planes, planes, (3, 3), stride=conv2_stride,
+                self.conv2 = ops.DeformConv(planes, planes, (3, 3), stride=conv2_stride,
                     padding=dilation, dilation=dilation,
                     num_deformable_groups=num_deformable_groups)
         else:
@@ -151,17 +146,6 @@ class Bottleneck(nn.Module):
         self.bn3 = nn.BatchNorm2d(planes * self.expansion)
         self.relu = nn.ReLU(inplace=True)
 
-        self.use_non_local = use_non_local
-        if self.use_non_local:
-            self.non_local_position = non_local_position
-            self.non_local_recurrence = non_local_recurrence
-            if self.non_local_position in ['before_conv2', 'after_conv2']:
-                self.non_local_block = CrissCrossAttention(planes)
-            elif self.non_local_position == 'after_relu':
-                self.non_local_block = CrissCrossAttention(planes * self.expansion)
-            else:
-                assert False, 'non local position {} not supported!'.format(self.non_local_position)
-
         self.downsample = downsample
         self.stride = stride
         self.dilation = dilation
@@ -169,21 +153,12 @@ class Bottleneck(nn.Module):
 
     def forward(self, x):
 
-        def _inner_recurrence_non_local(x):
-            for _ in range(self.non_local_recurrence):
-                x = self.non_local_block(x)
-            return x
-
         def _inner_forward(x):
             residual = x
 
             out = self.conv1(x)
             out = self.bn1(out)
             out = self.relu(out)
-
-            if self.use_non_local and self.non_local_position == 'before_conv2':
-                print("--->> non local ran before conv2")
-                out = _inner_recurrence_non_local(out)
 
             if self.with_dcn:
                 if self.use_modulated_dcn:
@@ -199,10 +174,6 @@ class Bottleneck(nn.Module):
                 out = self.conv2(out)
             out = self.bn2(out)
             out = self.relu(out)
-
-            if self.use_non_local and self.non_local_position == 'after_conv2':
-                print("--->> non local ran after conv2")
-                out = _inner_recurrence_non_local(out)
 
             out = self.conv3(out)
             out = self.bn3(out)
@@ -222,9 +193,6 @@ class Bottleneck(nn.Module):
 
         out = self.relu(out)
 
-        if self.use_non_local and self.non_local_position == 'after_relu':
-            out = _inner_recurrence_non_local(out)
-
         return out
 
 
@@ -239,10 +207,7 @@ def make_res_layer(block,
                    with_dcn=False,
                    dcn_offset_lr_mult=0.1,
                    use_regular_conv_on_stride=False,
-                   use_modulated_dcn=False,
-                   non_local_position='after_relu',
-                   non_local_recurrence=2,
-                   non_local_res_blocks=[]):
+                   use_modulated_dcn=False):
     downsample = None
     if stride != 1 or inplanes != planes * block.expansion:
         downsample = nn.Sequential(
@@ -268,17 +233,13 @@ def make_res_layer(block,
             with_dcn=with_dcn,
             dcn_offset_lr_mult=dcn_offset_lr_mult,
             use_regular_conv_on_stride=use_regular_conv_on_stride,
-            use_modulated_dcn=use_modulated_dcn,
-            use_non_local=(0 in non_local_res_blocks),
-            non_local_position=non_local_position,
-            non_local_recurrence=non_local_recurrence))
+            use_modulated_dcn=use_modulated_dcn))
     inplanes = planes * block.expansion
     for i in range(1, blocks):
         layers.append(
             block(inplanes, planes, 1, dilation, style=style, with_cp=with_cp, with_dcn=with_dcn, 
                   dcn_offset_lr_mult=dcn_offset_lr_mult, use_regular_conv_on_stride=use_regular_conv_on_stride,
-                  use_modulated_dcn=use_modulated_dcn, use_non_local=(i in non_local_res_blocks),
-                  non_local_position=non_local_position, non_local_recurrence=non_local_recurrence))
+                  use_modulated_dcn=use_modulated_dcn))
 
     return nn.Sequential(*layers)
 
@@ -327,10 +288,7 @@ class ResNet(nn.Module):
                  dcn_start_stage=3,
                  dcn_offset_lr_mult=0.1,
                  use_regular_conv_on_stride=False,
-                 use_modulated_dcn=False,
-                 non_local_flag_all_stages=[[], [], [], []],
-                 non_local_position='after_relu',
-                 non_local_recurrence=2):
+                 use_modulated_dcn=False):
         super(ResNet, self).__init__()
         if depth not in self.arch_settings:
             raise KeyError('invalid depth {} for resnet'.format(depth))
@@ -374,10 +332,7 @@ class ResNet(nn.Module):
                 with_dcn=use_dcn,
                 dcn_offset_lr_mult=dcn_offset_lr_mult,
                 use_regular_conv_on_stride=use_regular_conv_on_stride,
-                use_modulated_dcn=use_modulated_dcn,
-                non_local_res_blocks=non_local_flag_all_stages[i],
-                non_local_position=non_local_position,
-                non_local_recurrence=non_local_recurrence)
+                use_modulated_dcn=use_modulated_dcn)
             self.inplanes = planes * block.expansion
             layer_name = 'layer{}'.format(i + 1)
             self.add_module(layer_name, res_layer)

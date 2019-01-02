@@ -4,8 +4,6 @@ import torch
 import torch.nn as nn
 
 from mmdet import ops
-from ..mod_dcn.dcn_v2 import DCNPooling
-ops.DCNPooling = DCNPooling
 
 class SingleRoIExtractor(nn.Module):
     """Extract RoI features from a single level feature map.

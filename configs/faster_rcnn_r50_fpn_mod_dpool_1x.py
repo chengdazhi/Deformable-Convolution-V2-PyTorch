@@ -8,10 +8,7 @@ model = dict(
         num_stages=4,
         out_indices=(0, 1, 2, 3),
         frozen_stages=1,
-        style='pytorch',
-        with_dcn=True,
-        dcn_start_stage=3,
-        dcn_offset_lr_mult=0.1),
+        style='pytorch'),
     neck=dict(
         type='FPN',
         in_channels=[256, 512, 1024, 2048],
@@ -29,7 +26,7 @@ model = dict(
         use_sigmoid_cls=True),
     bbox_roi_extractor=dict(
         type='SingleRoIExtractor',
-        roi_layer=dict(type='RoIAlign', out_size=7, sample_num=2),
+        roi_layer=dict(type='ModulatedDeformRoIPoolingPack', pooled_size=7, output_dim=256, no_trans=False, group_size=1, trans_std=0.1),
         out_channels=256,
         featmap_strides=[4, 8, 16, 32]),
     bbox_head=dict(
@@ -153,7 +150,7 @@ log_config = dict(
 total_epochs = 12
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = './work_dirs/faster_rcnn_r50_fpn_dcn_c3_1x'
+work_dir = './work_dirs/faster_rcnn_r50_fpn_mod_dpool_1x'
 load_from = None
 resume_from = None
 workflow = [('train', 1)]

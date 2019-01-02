@@ -5,23 +5,6 @@ import numpy as np
 from mmcv.parallel import DataContainer as DC
 from torch.utils.data import Dataset
 
-from mmcv.utils import is_str, check_file_exist
-import cv2
-from mmcv.opencv_info import USE_OPENCV2
-if not USE_OPENCV2:
-    from cv2 import IMREAD_COLOR, IMREAD_GRAYSCALE, IMREAD_UNCHANGED
-else:
-    from cv2 import CV_LOAD_IMAGE_COLOR as IMREAD_COLOR
-    from cv2 import CV_LOAD_IMAGE_GRAYSCALE as IMREAD_GRAYSCALE
-    from cv2 import CV_LOAD_IMAGE_UNCHANGED as IMREAD_UNCHANGED
-
-imread_flags = {
-    'color': IMREAD_COLOR,
-    'grayscale': IMREAD_GRAYSCALE,
-    'unchanged': IMREAD_UNCHANGED
-}
-
-from .phillyzip import imread as phillyzip_imread
 from .transforms import (ImageTransform, BboxTransform, MaskTransform,
                          Numpy2Tensor)
 from .utils import to_tensor, random_scale
@@ -161,11 +144,7 @@ class CustomDataset(Dataset):
 
     def prepare_train_img(self, idx):
         img_info = self.img_infos[idx]
-        # load image
-        if '@' in self.img_prefix:
-            img = self.philly_imread(osp.join(self.img_prefix, img_info['filename']))
-        else:
-            img = mmcv.imread(osp.join(self.img_prefix, img_info['filename']))
+        img = mmcv.imread(osp.join(self.img_prefix, img_info['filename']))
 
         # load proposals if necessary
         if self.proposals is not None:
@@ -236,24 +215,11 @@ class CustomDataset(Dataset):
             data['gt_masks'] = DC(gt_masks, cpu_only=True)
         return data
 
-    def philly_imread(self, img_or_path, flag='color'):
-        if isinstance(img_or_path, np.ndarray):
-            return img_or_path
-        elif is_str(img_or_path):
-            flag = imread_flags[flag] if is_str(flag) else flag
-            # check_file_exist(img_or_path, 'img file does not exist: {}'.format(img_or_path))
-            return phillyzip_imread(img_or_path, flag)
-        else:
-            raise TypeError('"img" must be a numpy array or a filename')
-
 
     def prepare_test_img(self, idx):
         """Prepare an image for testing (multi-scale and flipping)"""
         img_info = self.img_infos[idx]
-        if '@' in self.img_prefix:
-            img = self.philly_imread(osp.join(self.img_prefix, img_info['filename']))
-        else:
-            img = mmcv.imread(osp.join(self.img_prefix, img_info['filename']))
+        img = mmcv.imread(osp.join(self.img_prefix, img_info['filename']))
         if self.proposals is not None:
             proposal = self.proposals[idx][:self.num_max_proposals]
             if not (proposal.shape[1] == 4 or proposal.shape[1] == 5):
