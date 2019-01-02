@@ -8,10 +8,9 @@ import torch
 import torch.nn as nn
 from torch.autograd import gradcheck
 
-from modulated_dcn import ModulatedDeformConvPack
-from modulated_dcn_func import ModulatedDeformConvFunction
-from modulated_dcn import DeformRoIPooling
-from modulated_dcn import ModulatedDeformRoIPoolingPack
+from modules.modulated_dcn import ModulatedDeformConvPack
+from modules.modulated_dcn import DeformRoIPooling
+from modules.modulated_dcn import ModulatedDeformRoIPoolingPack
 
 deformable_groups = 1
 N, inC, inH, inW = 2, 2, 4, 4
@@ -20,7 +19,7 @@ kH, kW = 3, 3
 
 
 def example_dconv():
-    from modulated_dcn import ModulatedDeformConv
+    from modules.modulated_dcn import ModulatedDeformConv
     input = torch.randn(2, 64, 128, 128).cuda()
     # wrap all things (offset and mask) in DCN
     dcn = ModulatedDeformConvPack(64, 64, kernel_size=(3,3), stride=1, padding=1, deformable_groups=2, no_bias=True).cuda()
@@ -32,7 +31,7 @@ def example_dconv():
     print(output.shape)
 
 def example_dpooling():
-    from modulated_dcn import ModulatedDeformRoIPoolingPack
+    from modules.modulated_dcn import ModulatedDeformRoIPoolingPack
     input = torch.randn(2, 32, 64, 64).cuda()
     batch_inds = torch.randint(2, (20, 1)).cuda().float()
     x = torch.randint(256, (20, 1)).cuda().float()
@@ -75,7 +74,7 @@ def example_dpooling():
     e.backward()
 
 def example_mdpooling():
-    from modulated_dcn import ModulatedDeformRoIPoolingPack
+    from modules.modulated_dcn import ModulatedDeformRoIPoolingPack
     input = torch.randn(2, 32, 64, 64).cuda()
     input.requires_grad = True
     batch_inds = torch.randint(2, (20, 1)).cuda().float()

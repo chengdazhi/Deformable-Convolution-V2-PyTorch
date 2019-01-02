@@ -4,10 +4,10 @@ import torch
 import torch.nn as nn
 from torch.nn.modules.module import Module
 from torch.nn.modules.utils import _pair
-from functions import conv_offset2d
+from functions import deform_conv_function
 
 
-class ConvOffset2d(Module):
+class DeformConv(Module):
     def __init__(self,
                  in_channels,
                  out_channels,
@@ -16,7 +16,7 @@ class ConvOffset2d(Module):
                  padding=0,
                  dilation=1,
                  num_deformable_groups=1):
-        super(ConvOffset2d, self).__init__()
+        super(DeformConv, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = _pair(kernel_size)
@@ -38,6 +38,6 @@ class ConvOffset2d(Module):
         self.weight.data.uniform_(-stdv, stdv)
 
     def forward(self, input, offset):
-        return conv_offset2d(input, offset, self.weight, self.stride,
+        return deform_conv_function(input, offset, self.weight, self.stride,
                              self.padding, self.dilation,
                              self.num_deformable_groups)

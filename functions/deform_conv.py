@@ -5,7 +5,7 @@ from torch.nn.modules.utils import _pair
 from _ext import deform_conv
 
 
-def conv_offset2d(input,
+def deform_conv_function(input,
                   offset,
                   weight,
                   stride=1,
@@ -19,14 +19,14 @@ def conv_offset2d(input,
             "Expected 4D tensor as input, got {}D tensor instead.".format(
                 input.dim()))
 
-    f = ConvOffset2dFunction(
+    f = DeformConvFunction(
         _pair(stride), _pair(padding), _pair(dilation), deform_groups, im2col_step)
     return f(input, offset, weight)
 
 
-class ConvOffset2dFunction(Function):
+class DeformConvFunction(Function):
     def __init__(self, stride, padding, dilation, deformable_groups=1, im2col_step=64):
-        super(ConvOffset2dFunction, self).__init__()
+        super(DeformConvFunction, self).__init__()
         self.stride = stride
         self.padding = padding
         self.dilation = dilation

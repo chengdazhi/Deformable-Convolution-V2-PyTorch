@@ -1,1 +1,2 @@
-from .deform_conv import ConvOffset2d
+from .deform_conv import DeformConv
+from .modulated_dcn import DeformRoIPooling, ModulatedDeformConv, ModulatedDeformConvPack, ModulatedDeformRoIPoolingPack

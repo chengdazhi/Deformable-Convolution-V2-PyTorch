@@ -8,8 +8,8 @@ import math
 from torch import nn
 from torch.nn.modules.utils import _pair
 
-from modulated_dcn_func import ModulatedDeformConvFunction
-from modulated_dcn_func import DeformRoIPoolingFunction
+from functions.modulated_dcn_func import ModulatedDeformConvFunction
+from functions.modulated_dcn_func import DeformRoIPoolingFunction
 
 class ModulatedDeformConv(nn.Module):
 

@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-from modules import ConvOffset2d
+from modules import DeformConv
 
 num_deformable_groups = 2
 
@@ -19,7 +19,7 @@ conv = nn.Conv2d(
     padding=(1, 1),
     bias=False).cuda()
 
-conv_offset2d = ConvOffset2d(
+conv_offset2d = DeformConv(
     inC,
     outC, (kH, kW),
     stride=1,
