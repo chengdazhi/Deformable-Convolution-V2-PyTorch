@@ -1,13 +1,13 @@
 #include <THC/THC.h>
-#include "cuda/dcn_v2_im2col_cuda.h"
-#include "cuda/dcn_v2_psroi_pooling_cuda.h"
+#include "cuda/modulated_deform_im2col_cuda.h"
+#include "cuda/deform_psroi_pooling_cuda.h"
 
 extern THCState *state;
 
 // author: Charles Shang
 // https://github.com/torch/cunn/blob/master/lib/THCUNN/generic/SpatialConvolutionMM.cu
 
-void dcn_v2_cuda_forward(THCudaTensor *input, THCudaTensor *weight,
+void modulated_deform_conv_cuda_forward(THCudaTensor *input, THCudaTensor *weight,
                          THCudaTensor *bias, THCudaTensor *ones,
                          THCudaTensor *offset, THCudaTensor *mask,
                          THCudaTensor *output, THCudaTensor *columns,
@@ -101,7 +101,7 @@ void dcn_v2_cuda_forward(THCudaTensor *input, THCudaTensor *weight,
     THCudaTensor_free(state, output_n);
 }
 
-void dcn_v2_cuda_backward(THCudaTensor *input, THCudaTensor *weight,
+void modulated_deform_conv_cuda_backward(THCudaTensor *input, THCudaTensor *weight,
                           THCudaTensor *bias, THCudaTensor *ones,
                           THCudaTensor *offset, THCudaTensor *mask,
                           THCudaTensor *columns,
@@ -240,7 +240,7 @@ void dcn_v2_cuda_backward(THCudaTensor *input, THCudaTensor *weight,
     THCudaTensor_free(state, grad_mask_n);
 }
 
-void dcn_v2_psroi_pooling_cuda_forward(THCudaTensor * input, THCudaTensor * bbox,
+void deform_psroi_pooling_cuda_forward(THCudaTensor * input, THCudaTensor * bbox,
                                        THCudaTensor * trans, 
                                        THCudaTensor * out, THCudaTensor * top_count,
                                        const int no_trans,
@@ -285,7 +285,7 @@ void dcn_v2_psroi_pooling_cuda_forward(THCudaTensor * input, THCudaTensor * bbox
                                trans_std);
 }
 
-void dcn_v2_psroi_pooling_cuda_backward(THCudaTensor * out_grad, 
+void deform_psroi_pooling_cuda_backward(THCudaTensor * out_grad,
                                         THCudaTensor * input, THCudaTensor * bbox,
                                         THCudaTensor * trans, THCudaTensor * top_count,
                                         THCudaTensor * input_grad, THCudaTensor * trans_grad,

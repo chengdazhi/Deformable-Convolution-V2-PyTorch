@@ -6,19 +6,17 @@ from __future__ import division
 import torch
 from torch.autograd import Function
 
-from _ext import dcn_v2 as _backend
-# from _ext import dcn_v2_double as _backend
+from _ext import modulated_dcn as _backend
 
 
-class DCNv2Function(Function):
+class ModulatedDeformConvFunction(Function):
 
-    def __init__(self, stride, padding, dilation=1, deformable_groups=1, no_bias=True):
-        super(DCNv2Function, self).__init__()
+    def __init__(self, stride, padding, dilation=1, deformable_groups=1):
+        super(ModulatedDeformConvFunction, self).__init__()
         self.stride = stride
         self.padding = padding
         self.dilation = dilation
         self.deformable_groups = deformable_groups
-        self.no_bias = no_bias
 
     def forward(self, input, offset, mask, weight, bias):
         if not input.is_cuda:
@@ -27,7 +25,7 @@ class DCNv2Function(Function):
             self.save_for_backward(input, offset, mask, weight, bias)
         output = input.new(*self._infer_shape(input, weight))
         self._bufs = [input.new(), input.new()]
-        _backend.dcn_v2_cuda_forward(input, weight,
+        _backend.modulated_deform_conv_cuda_forward(input, weight,
                                      bias, self._bufs[0],
                                      offset, mask,
                                      output, self._bufs[1],
@@ -47,7 +45,7 @@ class DCNv2Function(Function):
         grad_mask = mask.new(*mask.size()).zero_()
         grad_weight = weight.new(*weight.size()).zero_()
         grad_bias = bias.new(*bias.size()).zero_()
-        _backend.dcn_v2_cuda_backward(input, weight,
+        _backend.modulated_deform_conv_cuda_backward(input, weight,
                                       bias, self._bufs[0],
                                       offset, mask,
                                       self._bufs[1],
@@ -60,9 +58,6 @@ class DCNv2Function(Function):
                                       self.dilation, self.dilation,
                                       self.deformable_groups)
 
-        # if self.no_bias:
-        #     return grad_input, grad_offset, grad_mask, grad_weight
-        # else:
         return grad_input, grad_offset, grad_mask, grad_weight, grad_bias
 
     def _infer_shape(self, input, weight):
@@ -77,7 +72,7 @@ class DCNv2Function(Function):
         return (n, channels_out, height_out, width_out)
 
 
-class DCNv2PoolingFunction(Function):
+class DeformRoIPoolingFunction(Function):
 
     def __init__(self,
                  spatial_scale,
@@ -88,7 +83,7 @@ class DCNv2PoolingFunction(Function):
                  part_size=None,
                  sample_per_part=4,
                  trans_std=.0):
-        super(DCNv2PoolingFunction, self).__init__()
+        super(DeformRoIPoolingFunction, self).__init__()
         self.spatial_scale = spatial_scale
         self.pooled_size = pooled_size
         self.output_dim = output_dim
@@ -106,7 +101,7 @@ class DCNv2PoolingFunction(Function):
 
         output = data.new(*self._infer_shape(data, rois))
         output_count = data.new(*self._infer_shape(data, rois))
-        _backend.dcn_v2_psroi_pooling_cuda_forward(data, rois, offset,
+        _backend.deform_psroi_pooling_cuda_forward(data, rois, offset,
                                                    output, output_count,
                                                    self.no_trans, self.spatial_scale,
                                                    self.output_dim, self.group_size,
@@ -134,7 +129,7 @@ class DCNv2PoolingFunction(Function):
         grad_input = data.new(*data.size()).zero_()
         grad_offset = offset.new(*offset.size()).zero_()
 
-        _backend.dcn_v2_psroi_pooling_cuda_backward(grad_output,
+        _backend.deform_psroi_pooling_cuda_backward(grad_output,
                                                     data,
                                                     rois,
                                                     offset,

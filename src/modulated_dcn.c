@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <math.h>
 
-void dcn_v2_forward(THFloatTensor *input, THFloatTensor *weight,
+void modulated_deform_conv_forward(THFloatTensor *input, THFloatTensor *weight,
                         THFloatTensor *bias, THFloatTensor *ones,
                         THFloatTensor *offset, THFloatTensor *mask,
                         THFloatTensor *output, THFloatTensor *columns,
@@ -13,7 +13,7 @@ void dcn_v2_forward(THFloatTensor *input, THFloatTensor *weight,
 {
     printf("only implemented in GPU");
 }
-    void dcn_v2_backward(THFloatTensor *input, THFloatTensor *weight,
+    void modulated_deform_conv_backward(THFloatTensor *input, THFloatTensor *weight,
                          THFloatTensor *bias, THFloatTensor *ones,
                          THFloatTensor *offset, THFloatTensor *mask,
                          THFloatTensor *output, THFloatTensor *columns,

@@ -8,14 +8,14 @@ import math
 from torch import nn
 from torch.nn.modules.utils import _pair
 
-from dcn_v2_func import DCNv2Function
-from dcn_v2_func import DCNv2PoolingFunction
+from modulated_dcn_func import ModulatedDeformConvFunction
+from modulated_dcn_func import DeformRoIPoolingFunction
 
-class DCNv2(nn.Module):
+class ModulatedDeformConv(nn.Module):
 
     def __init__(self, in_channels, out_channels,
                  kernel_size, stride, padding, dilation=1, deformable_groups=1, no_bias=True):
-        super(DCNv2, self).__init__()
+        super(ModulatedDeformConv, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = _pair(kernel_size)
@@ -26,11 +26,10 @@ class DCNv2(nn.Module):
         self.no_bias = no_bias
 
         self.weight = nn.Parameter(torch.Tensor(out_channels, in_channels, *self.kernel_size))
-        if no_bias:
-            self.bias = torch.autograd.Variable(torch.zeros(out_channels).cuda())
-        else:
-            self.bias = nn.Parameter(torch.Tensor(out_channels))
+        self.bias = nn.Parameter(torch.zeros(out_channels))
         self.reset_parameters()
+        if self.no_bias:
+            self.bias.requires_grad = False
 
     def reset_parameters(self):
         n = self.in_channels
@@ -41,17 +40,17 @@ class DCNv2(nn.Module):
         self.bias.data.zero_()
 
     def forward(self, input, offset, mask):
-        func = DCNv2Function(self.stride, self.padding, self.dilation, self.deformable_groups, self.no_bias)
+        func = ModulatedDeformConvFunction(self.stride, self.padding, self.dilation, self.deformable_groups)
         return func(input, offset, mask, self.weight, self.bias)
 
 
-class DCN(DCNv2):
+class ModulatedDeformConvPack(ModulatedDeformConv):
 
     def __init__(self, in_channels, out_channels,
                  kernel_size, stride, padding,
-                 dilation=1, deformable_groups=1):
-        super(DCN, self).__init__(in_channels, out_channels,
-                                  kernel_size, stride, padding, dilation, deformable_groups)
+                 dilation=1, deformable_groups=1, no_bias=False):
+        super(ModulatedDeformConvPack, self).__init__(in_channels, out_channels,
+                                  kernel_size, stride, padding, dilation, deformable_groups, no_bias)
 
         self.conv_offset_mask = nn.Conv2d(self.in_channels,
                                           self.deformable_groups * 3 * self.kernel_size[0] * self.kernel_size[1],
@@ -70,11 +69,11 @@ class DCN(DCNv2):
         o1, o2, mask = torch.chunk(out, 3, dim=1)
         offset = torch.cat((o1, o2), dim=1)
         mask = torch.sigmoid(mask)
-        func = DCNv2Function(self.stride, self.padding, self.dilation, self.deformable_groups)
+        func = ModulatedDeformConvFunction(self.stride, self.padding, self.dilation, self.deformable_groups)
         return func(input, offset, mask, self.weight, self.bias)
 
 
-class DCNv2Pooling(nn.Module):
+class DeformRoIPooling(nn.Module):
 
     def __init__(self,
                  spatial_scale,
@@ -85,7 +84,7 @@ class DCNv2Pooling(nn.Module):
                  part_size=None,
                  sample_per_part=4,
                  trans_std=.0):
-        super(DCNv2Pooling, self).__init__()
+        super(DeformRoIPooling, self).__init__()
         self.spatial_scale = spatial_scale
         self.pooled_size = pooled_size
         self.output_dim = output_dim
@@ -94,7 +93,7 @@ class DCNv2Pooling(nn.Module):
         self.part_size = pooled_size if part_size is None else part_size
         self.sample_per_part = sample_per_part
         self.trans_std = trans_std
-        self.func = DCNv2PoolingFunction(self.spatial_scale,
+        self.func = DeformRoIPoolingFunction(self.spatial_scale,
                              self.pooled_size,
                              self.output_dim,
                              self.no_trans,
@@ -109,7 +108,7 @@ class DCNv2Pooling(nn.Module):
             offset = data.new()
         return self.func(data, rois, offset)
 
-class DCNPooling(DCNv2Pooling):
+class ModulatedDeformRoIPoolingPack(DeformRoIPooling):
 
     def __init__(self,
                  spatial_scale,
@@ -121,7 +120,7 @@ class DCNPooling(DCNv2Pooling):
                  sample_per_part=4,
                  trans_std=.0,
                  deform_fc_dim=1024):
-        super(DCNPooling, self).__init__(spatial_scale,
+        super(ModulatedDeformRoIPoolingPack, self).__init__(spatial_scale,
                                          pooled_size,
                                          output_dim,
                                          no_trans,
@@ -133,7 +132,7 @@ class DCNPooling(DCNv2Pooling):
         self.deform_fc_dim = deform_fc_dim
 
         if not no_trans:
-            self.func_offset = DCNv2PoolingFunction(self.spatial_scale,
+            self.func_offset = DeformRoIPoolingFunction(self.spatial_scale,
                                                     self.pooled_size,
                                                     self.output_dim,
                                                     True,
