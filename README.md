@@ -3,12 +3,18 @@
 
 ## Introduction
 
+This repo is for reproducing Deformable ConvNets V2 results on pytorch. Code is based on mmdetection.
+
 mmdetection is an open source object detection toolbox based on PyTorch. It is
 a part of the open-mmlab project developed by [Multimedia Laboratory, CUHK](http://mmlab.ie.cuhk.edu.hk/).
 
 ![demo image](demo/coco_test_12510.jpg)
 
 ### Major features
+
+- **Deformable ConvNets V2**
+
+  Supports Deformable ConvNets V2, including (modulated) Deformable Convolution and (modulated) Deformable RoI Pooling Operators.
 
 - **Modular Design**
 
