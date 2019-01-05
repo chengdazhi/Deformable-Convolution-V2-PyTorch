@@ -11,11 +11,11 @@ Refer to [mmdetection branch](https://github.com/chengdazhi/Deformable-Convoluti
 sh make.sh
 ```
 
-See `test.py` for example usage.
+See `test.py` and `test_modulated.py` for example usage.
 
 ## Notice
 
-The modulated deformable convolution is not yet supported. This repo provides the deformable conv layer which can reproduce the results in the Deformable ConvNets v2 paper. The major changes are as follows:
+This repo provides the deformable conv layer which can reproduce the results in the Deformable ConvNets v2 paper. The major changes are as follows:
 
 * To better handle occasions where sampling locations are outside of the image boundary.
 
