@@ -1,8 +1,9 @@
 #pragma once
 #include <torch/extension.h>
 
+
 std::tuple<at::Tensor, at::Tensor>
-deform_psroi_pooling_cuda_forward(const at::Tensor &input,
+deform_psroi_pooling_cpu_forward(const at::Tensor &input,
                                   const at::Tensor &bbox,
                                   const at::Tensor &trans,
                                   const int no_trans,
@@ -15,7 +16,7 @@ deform_psroi_pooling_cuda_forward(const at::Tensor &input,
                                   const float trans_std);
 
 std::tuple<at::Tensor, at::Tensor>
-deform_psroi_pooling_cuda_backward(const at::Tensor &out_grad,
+deform_psroi_pooling_cpu_backward(const at::Tensor &out_grad,
                                    const at::Tensor &input,
                                    const at::Tensor &bbox,
                                    const at::Tensor &trans,
