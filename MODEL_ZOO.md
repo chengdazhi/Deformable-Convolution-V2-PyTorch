@@ -131,6 +131,8 @@ We released RPN, Faster R-CNN and Mask R-CNN models in the first version. More m
 | R-50-FPN-ModulatedDeformPool | pytorch | 1x       | 0.91        | 38.2   |
 | R-101-FPN-Cascade-DeformConv-Res345 | pytorch | 1x       | --       | 45.1   |
 
+Above models can be downloaded on [Google Drive](https://drive.google.com/file/d/1vQD5TOVTcBLbn13OXgUe0nrC2mJq5kW3/view?usp=sharing) and [Baidu NetDisk, password d2qb](https://pan.baidu.com/s/1JEuTfCMIHQGG7a8oz5A8HQ).
+
 ## Comparison with Detectron
 
 We compare mmdetection with [Detectron](https://github.com/facebookresearch/Detectron)
