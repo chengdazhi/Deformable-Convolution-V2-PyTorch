@@ -13,8 +13,8 @@ from modules.modulated_deform_conv import ModulatedDeformConv, _ModulatedDeformC
 from modules.deform_psroi_pooling import DeformRoIPooling, _DeformRoIPooling, DeformRoIPoolingPack
 
 deformable_groups = 1
-N, inC, inH, inW = 2, 2, 4, 4
-outC = 2
+N, inC, inH, inW = 2, 3, 4, 4
+outC = 3
 kH, kW = 3, 3
 
 
@@ -39,6 +39,35 @@ def check_zero_offset():
     dcn = DeformConv(inC, outC, (kH, kW),
                    stride=1, padding=1, dilation=1,
                    deformable_groups=deformable_groups).cuda()
+    pcn = nn.Conv2d(inC, outC, (kH, kW), stride=1, padding=1, dilation=1).cuda()
+    pcn.weight = dcn.weight
+    pcn.bias = dcn.bias
+    print((pcn.weight.data - dcn.weight.data).abs().max())
+
+    conv_offset.weight.data.zero_()
+    conv_offset.bias.data.zero_()
+    # conv_identify(dcn.weight, dcn.bias)
+
+    input = torch.randn(N, inC, inH, inW).cuda()
+    offset = conv_offset(input)
+    output_d = dcn(input, offset)
+    output_p = pcn(input)
+    d = (output_d - output_p).abs().max()
+    if d < 1e-5:
+        print('Zero offset passed with {}'.format(d))
+    else:
+        print('Zero offset failed with {}'.format(d))
+
+def check_zero_offset_identify():
+    conv_offset = nn.Conv2d(inC, deformable_groups * 2 * kH * kW,
+                            kernel_size=(kH, kW),
+                            stride=(1, 1),
+                            padding=(1, 1),
+                            bias=True).cuda()
+
+    dcn = DeformConv(inC, outC, (kH, kW), 
+        stride=1, padding=1, dilation=1, 
+        deformable_groups=deformable_groups).cuda()
 
     conv_offset.weight.data.zero_()
     conv_offset.bias.data.zero_()
@@ -49,9 +78,9 @@ def check_zero_offset():
     output = dcn(input, offset)
     d = (input - output).abs().max()
     if d < 1e-10:
-        print('Zero offset passed')
+        print('Zero offset identify passed with {}'.format(d))
     else:
-        print('Zero offset failed')
+        print('Zero offset identify failed with {}'.format(d))
         print(input)
         print(output)
 
@@ -94,39 +123,42 @@ def check_zero_offset_modulated():
 
 def check_gradient_conv():
 
-    input = torch.rand(N, inC, inH, inW).cuda() * 0.01
+    input = torch.rand(N, inC, inH, inW).double().cuda() * 0.01
     input.requires_grad = True
     from torch.nn.functional import conv2d
 
-    weight = torch.randn(outC, inC, kH, kW).cuda()
+    weight = torch.randn(outC, inC, kH, kW).double().cuda()
     weight.requires_grad = True
 
-    bias = torch.rand(outC).cuda()
+    bias = torch.rand(outC).double().cuda()
     bias.requires_grad = True
 
     stride = 1
     padding = 1
     dilation = 1
 
+    # print('check_gradient_conv: ',
+    #       gradcheck(conv2d, (input, weight, bias,
+    #                 stride, padding, dilation, deformable_groups),
+    #                 eps=1e-3, atol=1e-2, rtol=1e-2, raise_exception=True))
     print('check_gradient_conv: ',
           gradcheck(conv2d, (input, weight, bias,
-                    stride, padding, dilation, deformable_groups),
-                    eps=1e-3, atol=1e-2, rtol=1e-2, raise_exception=True))
+                    stride, padding, dilation, deformable_groups)))
 
 def check_gradient_dconv():
 
-    input = torch.rand(N, inC, inH, inW).cuda() * 0.01
+    input = torch.rand(N, inC, inH, inW).double().cuda() * 0.01
     input.requires_grad = True
 
-    offset = torch.randn(N, deformable_groups * 2 * kW * kH, inH, inW).cuda() * 2
+    offset = torch.randn(N, deformable_groups * 2 * kW * kH, inH, inW).double().cuda() * 2
     # offset.data.zero_()
     # offset.data -= 0.5
     offset.requires_grad = True
 
-    weight = torch.randn(outC, inC, kH, kW).cuda()
+    weight = torch.randn(outC, inC, kH, kW).double().cuda()
     weight.requires_grad = True
 
-    bias = torch.rand(outC).cuda()
+    bias = torch.rand(outC).double().cuda()
     bias.requires_grad = True
 
     stride = 1
@@ -137,6 +169,9 @@ def check_gradient_dconv():
           gradcheck(_DeformConv, (input, offset, weight, bias,
                     stride, padding, dilation, deformable_groups),
                     eps=1e-3, atol=1e-3, rtol=1e-2, raise_exception=True))
+    # print('check_gradient_dconv: ',
+    #       gradcheck(_DeformConv, (input, offset, weight, bias,
+    #                 stride, padding, dilation, deformable_groups)))
 
 def check_gradient_mdconv():
 
@@ -166,7 +201,7 @@ def check_gradient_mdconv():
     print('check_gradient_mdconv: ',
           gradcheck(_ModulatedDeformConv, (input, offset, mask, weight, bias,
                     stride, padding, dilation, deformable_groups),
-                    eps=1e-6, atol=1e-5, rtol=1e-3, raise_exception=True))
+                    eps=1e-3, atol=1e-3, rtol=1e-2, raise_exception=True))
 
 
 def check_pooling_zero_offset():
@@ -241,7 +276,7 @@ def check_gradient_dpooling():
 def example_dconv():
     input = torch.randn(2, 64, 128, 128).cuda()
     # wrap all things (offset and mask) in DCN
-    dcn = DeformConvPack(64, 64, kernel_size=(3, 3), stride=1,
+    dcn = DeformConvPack(64, 128, kernel_size=(3, 3), stride=1,
               padding=1, deformable_groups=2).cuda()
     # print(dcn.weight.shape, input.shape)
     output = dcn(input)
@@ -254,7 +289,7 @@ def example_dconv():
 def example_mdconv():
     input = torch.randn(2, 64, 128, 128).cuda()
     # wrap all things (offset and mask) in DCN
-    dcn = ModulatedDeformConvPack(64, 64, kernel_size=(3, 3), stride=1,
+    dcn = ModulatedDeformConvPack(64, 128, kernel_size=(3, 3), stride=1,
               padding=1, deformable_groups=2).cuda()
     # print(dcn.weight.shape, input.shape)
     output = dcn(input)
@@ -342,16 +377,18 @@ if __name__ == '__main__':
     example_dpooling()
     example_mdpooling()
 
+    print('checking')
     check_pooling_zero_offset()
     # zero offset check
     if inC == outC:
         check_zero_offset()
+        check_zero_offset_identify()
         check_zero_offset_modulated()
 
-    check_gradient_dpooling()
     check_gradient_conv()
     check_gradient_dconv()
     check_gradient_mdconv()
+    check_gradient_dpooling()
     # """
     # ****** Note: backward is not reentrant error may not be a serious problem,
     # ****** since the max error is less than 1e-7,

@@ -2,3 +2,4 @@
 *.so
 _ext*
 __pycache__
+build
