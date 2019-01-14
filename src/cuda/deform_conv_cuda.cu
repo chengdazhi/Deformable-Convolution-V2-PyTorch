@@ -88,26 +88,21 @@ deform_conv_cuda_forward(const at::Tensor &input,
 
     }));
 
-    if (group == 1) 
+    // auto columns_m = columns.t();
+    // auto weight_m = weight.view({channels_out, channels_kernel * kernel_h * kernel_w}).t();
+    // output = at::addmm(bias, columns_m, weight_m);
+    auto columns_g = columns.view({group, channels/group * kernel_h * kernel_w, batch * height_out * width_out});
+    auto output_g = output.view({batch * height_out * width_out, group, channels_out/group});
+    auto weight_g = weight.view({group, channels_out/group, channels_kernel, kernel_h, kernel_w});
+    auto bias_g = bias.view({group, channels_out/group});
+    for (int g = 0; g < group; ++g)
     {
-        auto columns_m = columns.t();
-        auto weight_m = weight.view({channels_out, channels_kernel * kernel_h * kernel_w}).t();
-        output = at::addmm(bias, columns_m, weight_m);
+        auto columns_gm = columns_g.select(0, g).t();
+        auto weight_gm = weight_g.select(0, g).view({channels_out/group, channels_kernel * kernel_h * kernel_w}).t();
+        auto output_ = at::addmm(bias_g.select(0, g), columns_gm, weight_gm);
+        output_g.select(1, g) = output_.view({batch * height_out * width_out, channels_out/group});
     }
-    else
-    {
-        auto columns_g = columns.view({group, channels/group * kernel_h * kernel_w, batch * height_out * width_out});
-        auto output_g = output.view({batch * height_out * width_out, group, channels_out/group});
-        auto weight_g = weight.view({group, channels_out/group, channels_kernel, kernel_h, kernel_w});
-        auto bias_g = bias.view({group, channels_out/group});
-        for (int g = 0; g < group; ++g)
-        {
-            auto columns_gm = columns_g.select(0, g).t();
-            auto weight_gm = weight_g.select(0, g).view({channels_out/group, channels_kernel * kernel_h * kernel_w}).t();
-            auto output_ = at::addmm(bias_g.select(0, g), columns_gm, weight_gm);
-            output_g.select(1, g) = output_.view({batch * height_out * width_out, channels_out/group});
-        }
-    }
+
     output = output.view({batch, height_out, width_out, channels_out}).permute({0, 3, 1, 2}).contiguous();
 
     return output;
@@ -188,25 +183,19 @@ std::vector<at::Tensor> deform_conv_cuda_backward(const at::Tensor &input,
     auto grad_bias = at::zeros_like(bias);
     auto grad_offset = at::zeros_like(offset);
 
-    if (group == 1)
+    // auto grad_output_m = grad_output.permute({1, 0, 2, 3}).contiguous().view({channels_out, batch * height_out * width_out});
+    // auto weight_m = weight.view({channels_out, channels_kernel * kernel_h * kernel_w}).t();
+    // columns = at::mm(weight_m, grad_output_m);
+    auto grad_output_g = grad_output.view({batch, group, channels_out/group, height_out, width_out});
+    auto weight_g = weight.view({group, channels_out/group, channels_kernel, kernel_h, kernel_w});
+    auto columns_g = columns.view({group, channels/group * kernel_h * kernel_w, batch * height_out * width_out});
+    for (int g = 0; g < group; ++g)
     {
-        auto grad_output_m = grad_output.permute({1, 0, 2, 3}).contiguous().view({channels_out, batch * height_out * width_out});
-        auto weight_m = weight.view({channels_out, channels_kernel * kernel_h * kernel_w}).t();
-        columns = at::mm(weight_m, grad_output_m);
+        auto grad_output_gm = grad_output_g.select(1, g).permute({1, 0, 2, 3}).contiguous().view({channels_out/group, batch * height_out * width_out});
+        auto weight_gm = weight_g.select(0, g).view({channels_out/group, channels_kernel * kernel_h * kernel_w}).t();
+        columns_g.select(0, g) = at::mm(weight_gm, grad_output_gm);
     }
-    else
-    {
-        auto grad_output_g = grad_output.view({batch, group, channels_out/group, height_out, width_out});
-        auto weight_g = weight.view({group, channels_out/group, channels_kernel, kernel_h, kernel_w});
-        auto columns_g = columns.view({group, channels/group * kernel_h * kernel_w, batch * height_out * width_out});
-        for (int g = 0; g < group; ++g)
-        {
-            auto grad_output_gm = grad_output_g.select(1, g).permute({1, 0, 2, 3}).contiguous().view({channels_out/group, batch * height_out * width_out});
-            auto weight_gm = weight_g.select(0, g).view({channels_out/group, channels_kernel * kernel_h * kernel_w}).t();
-            columns_g.select(0, g) = at::mm(weight_gm, grad_output_gm);
-        }
 
-    }
     AT_DISPATCH_FLOATING_TYPES(input.type(), "deform_conv_backward_cuda", ([&] {
         deformable_col2im_coord_cuda(at::cuda::getCurrentCUDAStream(),
                                                columns.data<scalar_t>(),
@@ -239,26 +228,19 @@ std::vector<at::Tensor> deform_conv_cuda_backward(const at::Tensor &input,
 
     }));
 
-    if (group == 1)
+    // auto grad_output_m = grad_output.permute({1, 0, 2, 3}).contiguous().view({channels_out, batch * height_out * width_out});
+    // grad_weight = at::mm(grad_output_m, columns.t()).view_as(weight);
+    // grad_bias = at::mv(grad_output_m, ones);
+    // auto grad_output_g = grad_output.view({batch, group, channels_out/group, height_out, width_out});
+    // auto columns_g = columns.view({group, channels/group * kernel_h * kernel_w, batch * height_out * width_out});
+    auto grad_weight_g = grad_weight.view({group, channels_out/group, channels_kernel, kernel_h, kernel_w});
+    auto grad_bias_g = grad_bias.view({group, channels_out/group});
+    for (int g = 0; g < group; ++g)
     {
-        auto grad_output_m = grad_output.permute({1, 0, 2, 3}).contiguous().view({channels_out, batch * height_out * width_out});
-        grad_weight = at::mm(grad_output_m, columns.t()).view_as(weight);
-        grad_bias = at::mv(grad_output_m, ones);
-    }
-    else
-    {
-        auto columns_g = columns.view({group, channels/group * kernel_h * kernel_w, batch * height_out * width_out});
-        auto grad_output_g = grad_output.view({batch, group, channels_out/group, height_out, width_out});
-        auto grad_weight_g = grad_weight.view({group, channels_out/group, channels_kernel, kernel_h, kernel_w});
-        auto grad_bias_g = grad_bias.view({group, channels_out/group});
-        for (int g = 0; g < group; ++g)
-        {
-            auto grad_output_gm = grad_output_g.select(1, g).permute({1, 0, 2, 3}).contiguous().view({channels_out/group, batch * height_out * width_out});
-            auto columns_gm = columns_g.select(0, g).t();
-            grad_weight_g.select(0, g) = at::mm(grad_output_gm, columns_gm).view_as(grad_weight_g.select(0, g));
-            grad_bias_g.select(0, g) = at::mv(grad_output_gm, ones);
-        }
-
+        auto grad_output_gm = grad_output_g.select(1, g).permute({1, 0, 2, 3}).contiguous().view({channels_out/group, batch * height_out * width_out});
+        auto columns_gm = columns_g.select(0, g).t();
+        grad_weight_g.select(0, g) = at::mm(grad_output_gm, columns_gm).view_as(grad_weight_g.select(0, g));
+        grad_bias_g.select(0, g) = at::mv(grad_output_gm, ones);
     }
 
     return {
