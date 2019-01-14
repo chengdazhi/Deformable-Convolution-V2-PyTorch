@@ -14,19 +14,27 @@ from functions.deform_psroi_pooling_func import DeformRoIPoolingFunction
 class ModulatedDeformConv(nn.Module):
 
     def __init__(self, in_channels, out_channels,
-                 kernel_size, stride, padding, dilation=1, deformable_groups=1, no_bias=True):
+                 kernel_size, stride, padding, dilation=1, groups=1, deformable_groups=1, im2col_step=64, no_bias=True):
         super(ModulatedDeformConv, self).__init__()
+
+        if in_channels % groups != 0:
+            raise ValueError('in_channels {} must be divisible by groups {}'.format(in_channels, groups))
+        if out_channels % groups != 0:
+            raise ValueError('out_channels {} must be divisible by groups {}'.format(out_channels, groups))
+
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = _pair(kernel_size)
         self.stride = _pair(stride)
         self.padding = _pair(padding)
         self.dilation = _pair(dilation)
+        self.groups = groups
         self.deformable_groups = deformable_groups
+        self.im2col_step = im2col_step
         self.no_bias = no_bias
 
         self.weight = nn.Parameter(torch.Tensor(
-            out_channels, in_channels, *self.kernel_size))
+            out_channels, in_channels//groups, *self.kernel_size))
         self.bias = nn.Parameter(torch.Tensor(out_channels))
         self.reset_parameters()
         if self.no_bias:
@@ -51,7 +59,9 @@ class ModulatedDeformConv(nn.Module):
                                                    self.stride,
                                                    self.padding,
                                                    self.dilation,
-                                                   self.deformable_groups)
+                                                   self.groups,
+                                                   self.deformable_groups,
+                                                   self.im2col_step)
 
 _ModulatedDeformConv = ModulatedDeformConvFunction.apply
 
@@ -59,9 +69,9 @@ class ModulatedDeformConvPack(ModulatedDeformConv):
 
     def __init__(self, in_channels, out_channels,
                  kernel_size, stride, padding,
-                 dilation=1, deformable_groups=1, no_bias=False):
+                 dilation=1, groups=1, deformable_groups=1, im2col_step=64, no_bias=False):
         super(ModulatedDeformConvPack, self).__init__(in_channels, out_channels,
-                                  kernel_size, stride, padding, dilation, deformable_groups, no_bias)
+                                  kernel_size, stride, padding, dilation, groups, deformable_groups, im2col_step, no_bias)
 
         out_channels = self.deformable_groups * 3 * self.kernel_size[0] * self.kernel_size[1]
         self.conv_offset_mask = nn.Conv2d(self.in_channels,
@@ -87,5 +97,7 @@ class ModulatedDeformConvPack(ModulatedDeformConv):
                                                 self.stride, 
                                                 self.padding, 
                                                 self.dilation, 
-                                                self.deformable_groups)
+                                                self.groups,
+                                                self.deformable_groups,
+                                                self.im2col_step)
 

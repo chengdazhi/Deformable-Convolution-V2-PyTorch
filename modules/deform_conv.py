@@ -32,6 +32,7 @@ class DeformConv(nn.Module):
         self.deformable_groups = deformable_groups
         self.im2col_step = im2col_step
         self.no_bias = no_bias
+        
         self.weight = nn.Parameter(torch.Tensor(
             out_channels, in_channels//groups, *self.kernel_size))
         self.bias = nn.Parameter(torch.Tensor(out_channels))

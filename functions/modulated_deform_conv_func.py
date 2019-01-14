@@ -15,19 +15,23 @@ import DCN
 class ModulatedDeformConvFunction(Function):
     @staticmethod
     def forward(ctx, input, offset, mask, weight, bias,
-                stride, padding, dilation, deformable_groups):
+                stride, padding, dilation, groups, deformable_groups, im2col_step):
         ctx.stride = _pair(stride)
         ctx.padding = _pair(padding)
         ctx.dilation = _pair(dilation)
         ctx.kernel_size = _pair(weight.shape[2:4])
+        ctx.groups = groups
         ctx.deformable_groups = deformable_groups
+        ctx.im2col_step = im2col_step
         output = DCN.modulated_deform_conv_forward(input, weight, bias,
                                          offset, mask,
                                          ctx.kernel_size[0], ctx.kernel_size[1],
                                          ctx.stride[0], ctx.stride[1],
                                          ctx.padding[0], ctx.padding[1],
                                          ctx.dilation[0], ctx.dilation[1],
-                                         ctx.deformable_groups)
+                                         ctx.groups,
+                                         ctx.deformable_groups,
+                                         ctx.im2col_step)
         ctx.save_for_backward(input, offset, mask, weight, bias)
         return output
 
@@ -44,7 +48,9 @@ class ModulatedDeformConvFunction(Function):
                                      ctx.stride[0], ctx.stride[1],
                                      ctx.padding[0], ctx.padding[1],
                                      ctx.dilation[0], ctx.dilation[1],
-                                     ctx.deformable_groups)
+                                     ctx.groups,
+                                     ctx.deformable_groups,
+                                     ctx.im2col_step)
 
         return grad_input, grad_offset, grad_mask, grad_weight, grad_bias,\
-            None, None, None, None,
+            None, None, None, None, None, None

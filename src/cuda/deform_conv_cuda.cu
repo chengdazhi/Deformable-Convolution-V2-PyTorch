@@ -167,7 +167,6 @@ std::vector<at::Tensor> deform_conv_cuda_backward(const at::Tensor &input,
     AT_ASSERTM((channels % group == 0) && (channels_out % group == 0), 
         "channels(%d) and channels_out(%d) must divide group(%d)", channels, channels_out, group)
 
-
     AT_ASSERTM(kernel_h_ == kernel_h && kernel_w_ == kernel_w,
                "Input shape and kernel shape wont match: (%d x %d vs %d x %d).", kernel_h_, kernel_w, kernel_h_, kernel_w_);
 
