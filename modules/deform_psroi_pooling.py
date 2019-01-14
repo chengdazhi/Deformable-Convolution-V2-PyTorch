@@ -8,7 +8,7 @@ import math
 from torch import nn
 from torch.nn.modules.utils import _pair
 
-from functions.deform_psroi_pooling_func import DeformRoIPoolingFunction
+from ..functions.deform_psroi_pooling_func import DeformRoIPoolingFunction
 
 class DeformRoIPooling(nn.Module):
 
