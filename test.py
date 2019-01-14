@@ -18,6 +18,7 @@ outC = 4
 kH, kW = 3, 3
 
 
+torch.manual_seed(3)
 def conv_identify(weight, bias, groups=1):
     weight.data.zero_()
     bias.data.zero_()
@@ -42,7 +43,7 @@ def check_zero_offset():
     dcn = DeformConv(inC, outC, (kH, kW),
                    stride=1, padding=1, dilation=1,
                    groups=2, 
-                   deformable_groups=deformable_groups).cuda()
+                   deformable_groups=deformable_groups, im2col_step=1).cuda()
     pcn = nn.Conv2d(inC, outC, (kH, kW), stride=1, padding=1, dilation=1, groups=2).cuda()
     pcn.weight = dcn.weight
     pcn.bias = dcn.bias
@@ -76,7 +77,8 @@ def check_zero_offset_identify():
     dcn = DeformConv(inC, outC, (kH, kW), 
         stride=1, padding=1, dilation=1, 
         groups=groups, 
-        deformable_groups=deformable_groups).cuda()
+        deformable_groups=deformable_groups,
+        im2col_step=1).cuda()
 
     conv_offset.weight.data.zero_()
     conv_offset.bias.data.zero_()
@@ -93,6 +95,78 @@ def check_zero_offset_identify():
         # print(input)
         # print(output)
         print((input - output).abs())
+
+def check_im2col_step_forward():
+    conv_offset = nn.Conv2d(inC, deformable_groups * 2 * kH * kW,
+                            kernel_size=(kH, kW),
+                            stride=(1, 1),
+                            padding=(1, 1),
+                            bias=True).cuda()
+
+    input = torch.randn(N, inC, inH, inW).cuda()
+    offset = conv_offset(input)
+    groups = 2
+
+    dcn1 = DeformConv(inC, outC, (kH, kW), 
+        stride=1, padding=1, dilation=1, 
+        groups=groups, 
+        deformable_groups=deformable_groups,
+        im2col_step=1).cuda()
+
+    dcn2 = DeformConv(inC, outC, (kH, kW), 
+        stride=1, padding=1, dilation=1, 
+        groups=groups, 
+        deformable_groups=deformable_groups,
+        im2col_step=2).cuda()
+    dcn1.weight = dcn2.weight
+    dcn1.bias = dcn2.bias
+    output1 = dcn1(input, offset)
+    output2 = dcn2(input, offset)
+
+    d = (output1 - output2).abs().max()
+    if d < 1e-10:
+        print('im2col_step forward passed with {}'.format(d))
+    else:
+        print('im2col_step forward failed with {}'.format(d))
+        print(output1)
+        print(output2)
+        print((output1 - output2).abs())
+
+def check_im2col_step_backward():
+    stride = 1
+    padding = 1
+    groups = 2
+    dilation = 1
+
+    input = torch.rand(N, inC, inH, inW).cuda() * 0.01
+    input.requires_grad = True
+
+    offset = torch.randn(N, deformable_groups * 2 * kW * kH, inH, inW).cuda() * 2
+    # offset.data.zero_()
+    # offset.data -= 0.5
+    offset.requires_grad = True
+
+    weight = torch.randn(outC, int(inC//groups), kH, kW).cuda()
+    weight.requires_grad = True
+
+    bias = torch.rand(outC).cuda()
+    bias.requires_grad = True
+
+    output1 = _DeformConv(input, offset, weight, bias, stride, padding, dilation, groups, deformable_groups, 2)
+    targert = torch.rand(*output1.size()).cuda()
+    error = (targert - output1).mean()
+    error.backward(retain_graph=True)
+    input_grad = input.grad.clone()
+    output2 = _DeformConv(input, offset, weight, bias, stride, padding, dilation, groups, deformable_groups, 2)
+    error2 = (targert - output2).mean()
+    error.backward()
+    print((output1 - output2).abs().max())
+    input_grad_err = (input.grad.clone() - 2 * input_grad).abs().max()
+    if input_grad_err < 1e-7:
+        print("im2col_step backward passed with {}".format(input_grad_err))
+    else:
+        print("im2col_step backward failed with {}".format(input_grad_err))
+
 
 def check_zero_offset_modulated():
     conv_offset = nn.Conv2d(inC, deformable_groups * 2 * kH * kW,
@@ -161,7 +235,7 @@ def check_gradient_dconv():
     padding = 1
     groups = 2
     dilation = 1
-    im2col_step = 64
+    im2col_step = 1
 
     input = torch.rand(N, inC, inH, inW).double().cuda() * 0.01
     input.requires_grad = True
@@ -385,6 +459,8 @@ def example_mdpooling():
 if __name__ == '__main__':
 
     example_dconv()
+    check_im2col_step_forward()
+    check_im2col_step_backward()
     example_mdconv()
     example_dpooling()
     example_mdpooling()
