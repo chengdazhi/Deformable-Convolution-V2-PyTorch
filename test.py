@@ -13,20 +13,23 @@ from modules.modulated_deform_conv import ModulatedDeformConv, _ModulatedDeformC
 from modules.deform_psroi_pooling import DeformRoIPooling, _DeformRoIPooling, DeformRoIPoolingPack
 
 deformable_groups = 1
-N, inC, inH, inW = 2, 3, 4, 4
-outC = 3
+N, inC, inH, inW = 2, 4, 4, 4
+outC = 4
 kH, kW = 3, 3
 
 
-def conv_identify(weight, bias):
+def conv_identify(weight, bias, groups=1):
     weight.data.zero_()
     bias.data.zero_()
     o, i, h, w = weight.shape
     y = h//2
     x = w//2
+    oc = o // groups
     for p in range(i):
         for q in range(o):
-            if p == q:
+            if (p) == (q % oc):
+                # print(q, p, y, x)
+                # print(q % oc)
                 weight.data[q, p, y, x] = 1.0
 
 def check_zero_offset():
@@ -38,8 +41,9 @@ def check_zero_offset():
 
     dcn = DeformConv(inC, outC, (kH, kW),
                    stride=1, padding=1, dilation=1,
+                   groups=2, 
                    deformable_groups=deformable_groups).cuda()
-    pcn = nn.Conv2d(inC, outC, (kH, kW), stride=1, padding=1, dilation=1).cuda()
+    pcn = nn.Conv2d(inC, outC, (kH, kW), stride=1, padding=1, dilation=1, groups=2).cuda()
     pcn.weight = dcn.weight
     pcn.bias = dcn.bias
     print((pcn.weight.data - dcn.weight.data).abs().max())
@@ -57,6 +61,9 @@ def check_zero_offset():
         print('Zero offset passed with {}'.format(d))
     else:
         print('Zero offset failed with {}'.format(d))
+        # print(output_p)
+        # print(output_d)
+        print((output_d - output_p).abs())
 
 def check_zero_offset_identify():
     conv_offset = nn.Conv2d(inC, deformable_groups * 2 * kH * kW,
@@ -65,13 +72,15 @@ def check_zero_offset_identify():
                             padding=(1, 1),
                             bias=True).cuda()
 
+    groups = 2
     dcn = DeformConv(inC, outC, (kH, kW), 
         stride=1, padding=1, dilation=1, 
+        groups=groups, 
         deformable_groups=deformable_groups).cuda()
 
     conv_offset.weight.data.zero_()
     conv_offset.bias.data.zero_()
-    conv_identify(dcn.weight, dcn.bias)
+    conv_identify(dcn.weight, dcn.bias, groups)
 
     input = torch.randn(N, inC, inH, inW).cuda()
     offset = conv_offset(input)
@@ -81,8 +90,9 @@ def check_zero_offset_identify():
         print('Zero offset identify passed with {}'.format(d))
     else:
         print('Zero offset identify failed with {}'.format(d))
-        print(input)
-        print(output)
+        # print(input)
+        # print(output)
+        print((input - output).abs())
 
 def check_zero_offset_modulated():
     conv_offset = nn.Conv2d(inC, deformable_groups * 2 * kH * kW,
@@ -147,6 +157,12 @@ def check_gradient_conv():
 
 def check_gradient_dconv():
 
+    stride = 1
+    padding = 1
+    groups = 2
+    dilation = 1
+    im2col_step = 64
+
     input = torch.rand(N, inC, inH, inW).double().cuda() * 0.01
     input.requires_grad = True
 
@@ -155,19 +171,15 @@ def check_gradient_dconv():
     # offset.data -= 0.5
     offset.requires_grad = True
 
-    weight = torch.randn(outC, inC, kH, kW).double().cuda()
+    weight = torch.randn(outC, int(inC//groups), kH, kW).double().cuda()
     weight.requires_grad = True
 
     bias = torch.rand(outC).double().cuda()
     bias.requires_grad = True
 
-    stride = 1
-    padding = 1
-    dilation = 1
-
     print('check_gradient_dconv: ',
           gradcheck(_DeformConv, (input, offset, weight, bias,
-                    stride, padding, dilation, deformable_groups),
+                    stride, padding, dilation, groups, deformable_groups, im2col_step),
                     eps=1e-3, atol=1e-3, rtol=1e-2, raise_exception=True))
     # print('check_gradient_dconv: ',
     #       gradcheck(_DeformConv, (input, offset, weight, bias,
@@ -277,7 +289,7 @@ def example_dconv():
     input = torch.randn(2, 64, 128, 128).cuda()
     # wrap all things (offset and mask) in DCN
     dcn = DeformConvPack(64, 128, kernel_size=(3, 3), stride=1,
-              padding=1, deformable_groups=2).cuda()
+              padding=1, groups=2, deformable_groups=2).cuda()
     # print(dcn.weight.shape, input.shape)
     output = dcn(input)
     targert = output.new(*output.size())

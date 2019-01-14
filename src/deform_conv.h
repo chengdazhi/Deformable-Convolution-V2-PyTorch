@@ -20,7 +20,9 @@ deform_conv_forward(const at::Tensor &input,
                const int pad_w,
                const int dilation_h,
                const int dilation_w,
-               const int deformable_group)
+               const int group,
+               const int deformable_group,
+               const int im2col_step)
 {
     if (input.type().is_cuda())
     {
@@ -30,7 +32,9 @@ deform_conv_forward(const at::Tensor &input,
                                    stride_h, stride_w,
                                    pad_h, pad_w,
                                    dilation_h, dilation_w,
-                                   deformable_group);
+                                   group,
+                                   deformable_group, 
+                                   im2col_step);
 #else
         AT_ERROR("Not compiled with GPU support");
 #endif
@@ -44,11 +48,17 @@ deform_conv_backward(const at::Tensor &input,
                 const at::Tensor &bias,
                 const at::Tensor &offset,
                 const at::Tensor &grad_output,
-                int kernel_h, int kernel_w,
-                int stride_h, int stride_w,
-                int pad_h, int pad_w,
-                int dilation_h, int dilation_w,
-                int deformable_group)
+                const int kernel_h, 
+                const int kernel_w,
+                const int stride_h, 
+                const int stride_w,
+                const int pad_h, 
+                const int pad_w,
+                const int dilation_h, 
+                const int dilation_w,
+                const int group,
+                const int deformable_group,
+                const int im2col_step)
 {
     if (input.type().is_cuda())
     {
@@ -62,7 +72,9 @@ deform_conv_backward(const at::Tensor &input,
                                     stride_h, stride_w,
                                     pad_h, pad_w,
                                     dilation_h, dilation_w,
-                                    deformable_group);
+                                    group,
+                                    deformable_group,
+                                    im2col_step);
 #else
         AT_ERROR("Not compiled with GPU support");
 #endif
