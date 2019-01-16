@@ -8,9 +8,10 @@ import torch
 import torch.nn as nn
 from torch.autograd import gradcheck
 
-from modules.deform_conv import DeformConv, _DeformConv, DeformConvPack
-from modules.modulated_deform_conv import ModulatedDeformConv, _ModulatedDeformConv, ModulatedDeformConvPack
-from modules.deform_psroi_pooling import DeformRoIPooling, _DeformRoIPooling, DeformRoIPoolingPack
+# please run test file from parent folder, e.g. scp test.py .. && python ../test.py
+from dcn.modules.deform_conv import DeformConv, _DeformConv, DeformConvPack
+from dcn.modules.modulated_deform_conv import ModulatedDeformConv, _ModulatedDeformConv, ModulatedDeformConvPack
+from dcn.modules.deform_psroi_pooling import DeformRoIPooling, _DeformRoIPooling, DeformRoIPoolingPack
 
 deformable_groups = 1
 N, inC, inH, inW = 2, 4, 4, 4
@@ -97,8 +98,8 @@ def check_mdconv_zero_offset():
     offset = conv_offset(input)
     mask = conv_mask(input)
     mask = torch.sigmoid(mask)
+    mask *= 2
     output_d = dcn(input, offset, mask)
-    output_d *= 2
     output_p = pcn(input)
     d = (output_d - output_p).abs().max()
     if d < 1e-5:

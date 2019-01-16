@@ -6,6 +6,7 @@ from __future__ import division
 import torch
 import math
 from torch import nn
+from torch.nn import init
 from torch.nn.modules.utils import _pair
 
 from ..functions.modulated_deform_conv_func import ModulatedDeformConvFunction
@@ -41,11 +42,11 @@ class ModulatedDeformConv(nn.Module):
 
     def reset_parameters(self):
         n = self.in_channels
-        for k in self.kernel_size:
-            n *= k
-        stdv = 1. / math.sqrt(n)
-        self.weight.data.uniform_(-stdv, stdv)
-        self.bias.data.zero_()
+        init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+        if self.bias is not None:
+            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
+            bound = 1 / math.sqrt(fan_in)
+            init.uniform_(self.bias, -bound, bound)
 
     def forward(self, input, offset, mask):
         assert 2 * self.deformable_groups * self.kernel_size[0] * self.kernel_size[1] == \
@@ -68,7 +69,7 @@ class ModulatedDeformConvPack(ModulatedDeformConv):
 
     def __init__(self, in_channels, out_channels,
                  kernel_size, stride, padding,
-                 dilation=1, groups=1, deformable_groups=1, im2col_step=64, bias=False):
+                 dilation=1, groups=1, deformable_groups=1, im2col_step=64, bias=True, lr_mult=0.1):
         super(ModulatedDeformConvPack, self).__init__(in_channels, out_channels,
                                   kernel_size, stride, padding, dilation, groups, deformable_groups, im2col_step, bias)
 
@@ -79,6 +80,7 @@ class ModulatedDeformConvPack(ModulatedDeformConv):
                                           stride=self.stride,
                                           padding=self.padding,
                                           bias=True)
+        self.conv_offset_mask.lr_mult = lr_mult
         self.init_offset()
 
     def init_offset(self):
