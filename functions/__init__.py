@@ -1,2 +1,3 @@
-from .deform_conv import DeformConvFunction, deform_conv_function
-from .modulated_dcn_func import DeformRoIPoolingFunction, ModulatedDeformConvFunction
+from .deform_conv_func import DeformConvFunction
+from .modulated_deform_conv_func import ModulatedDeformConvFunction
+from .deform_psroi_pooling_func import DeformRoIPoolingFunction
