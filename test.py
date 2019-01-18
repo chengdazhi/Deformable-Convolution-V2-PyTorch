@@ -8,10 +8,9 @@ import torch
 import torch.nn as nn
 from torch.autograd import gradcheck
 
-# please run test file from parent folder, e.g. scp test.py .. && python ../test.py
-from dcn.modules.deform_conv import DeformConv, _DeformConv, DeformConvPack
-from dcn.modules.modulated_deform_conv import ModulatedDeformConv, _ModulatedDeformConv, ModulatedDeformConvPack
-from dcn.modules.deform_psroi_pooling import DeformRoIPooling, _DeformRoIPooling, DeformRoIPoolingPack
+from modules.deform_conv import DeformConv, _DeformConv, DeformConvPack
+from modules.modulated_deform_conv import ModulatedDeformConv, _ModulatedDeformConv, ModulatedDeformConvPack
+from modules.deform_psroi_pooling import DeformRoIPooling, _DeformRoIPooling, DeformRoIPoolingPack
 
 deformable_groups = 1
 N, inC, inH, inW = 2, 4, 4, 4
