@@ -66,11 +66,10 @@
        i += blockDim.x * gridDim.x)
 
 const int CUDA_NUM_THREADS = 1024;
-
+const int kMaxGridNum = 65535;
 inline int GET_BLOCKS(const int N) {
-  return (N + CUDA_NUM_THREADS - 1) / CUDA_NUM_THREADS;
+  return std::min(kMaxGridNum, (N + CUDA_NUM_THREADS - 1) / CUDA_NUM_THREADS);
 }
-
 
 template <typename DType>
 __device__ DType deformable_im2col_bilinear(const DType *bottom_data, const int data_width,
