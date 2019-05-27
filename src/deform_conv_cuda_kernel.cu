@@ -60,6 +60,7 @@
 
 #include "deform_conv_cuda_kernel.h"
 #include <cstdio>
+#include <algorithm>
 
 #define CUDA_KERNEL_LOOP(i, n)                                                 \
   for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < (n);                 \
