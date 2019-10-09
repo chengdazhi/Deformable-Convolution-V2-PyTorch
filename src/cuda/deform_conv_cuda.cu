@@ -55,10 +55,10 @@ deform_conv_cuda_forward(const at::Tensor &input,
 
     const int im2col_step_ = std::min(batch, im2col_step);
 
-    AT_ASSERTM(batch % im2col_step_ == 0, "batch(%d) must divide im2col_step(%d)", batch, im2col_step_)
+    AT_ASSERTM(batch % im2col_step_ == 0, "batch(%d) must divide im2col_step(%d)", batch, im2col_step_);
 
     AT_ASSERTM((channels % group == 0) && (channels_out % group == 0), 
-        "channels(%d) and channels_out(%d) must divide group(%d)", channels, channels_out, group)
+        "channels(%d) and channels_out(%d) must divide group(%d)", channels, channels_out, group);
 
     // printf("Kernels: %d %d %d %d\n", kernel_h_, kernel_w_, kernel_w, kernel_h);
     // printf("Channels: %d %d\n", channels, channels_kernel);
@@ -162,10 +162,10 @@ std::vector<at::Tensor> deform_conv_cuda_backward(const at::Tensor &input,
 
     const int im2col_step_ = std::min(im2col_step, batch);
 
-    AT_ASSERTM(batch % im2col_step_ == 0, "batch(%d) must divide im2col_step(%d)", batch, im2col_step_)
+    AT_ASSERTM(batch % im2col_step_ == 0, "batch(%d) must divide im2col_step(%d)", batch, im2col_step_);
 
     AT_ASSERTM((channels % group == 0) && (channels_out % group == 0), 
-        "channels(%d) and channels_out(%d) must divide group(%d)", channels, channels_out, group)
+        "channels(%d) and channels_out(%d) must divide group(%d)", channels, channels_out, group);
 
     AT_ASSERTM(kernel_h_ == kernel_h && kernel_w_ == kernel_w,
                "Input shape and kernel shape wont match: (%d x %d vs %d x %d).", kernel_h_, kernel_w, kernel_h_, kernel_w_);
