@@ -40,3 +40,7 @@ This repo provides the deformable conv layer which can reproduce the results in 
       end
 
     In the previous operator, S is fixed as 1. In the updated operator, S can be set by the *im2col_step* parameter, whose default value is min(N, 64). The updated operator is significantly faster than the existing one when the image batch size is large.
+
+## License
+
+This repo is released under MIT license. 
