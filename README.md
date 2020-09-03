@@ -7,7 +7,7 @@ Refer to [mmdetection branch](https://github.com/chengdazhi/Deformable-Convoluti
 
 Operators in master branch are compatible with pytorch_v0.4.1. For operators on pytorch v1.0.0 (implemented by [Jiarui Xu](https://github.com/xvjiarui)), please refer to [pytorch_1.0.0 branch](https://github.com/chengdazhi/Deformable-Convolution-V2-PyTorch/tree/pytorch_1.0.0).
 
-Thanks to [Kai Chen](https://github.com/hellock) and other contributors from mmlab, DCNv2 is now included in the official mmdetection repo based on the master branch of this one. It is now written with the new cpp extension apis and it supports both PyTorch 0.4.1 and 1.0, with some minor speed and memory optimization. Results and models can be found at https://github.com/open-mmlab/mmdetection/blob/master/MODEL_ZOO.md#deformable-convolution-v2.
+Thanks to [Kai Chen](https://github.com/hellock) and other contributors from mmlab, DCNv2 is now included in the official mmdetection repo based on the master branch of this one. It is now written with the new cpp extension apis and it supports both PyTorch 0.4.1 and 1.0, with some minor speed and memory optimization. Results and models can be found at https://github.com/open-mmlab/mmdetection/tree/master/configs/dcn.
 
 ## Build
 
